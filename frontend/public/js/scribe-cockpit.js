@@ -1337,11 +1337,12 @@
       .replace(/\s+/g, ' ')
       .replace(/\s*-\s*/g, '-');
 
+    // Replace spoken words FIRST before pattern matching
     normalized = normalized
       .replace(/\bDASH\b/gi, '-')
       .replace(/\bHYPHEN\b/gi, '-');
 
-    const excludeWords = /^(NUMBER|IS|MRN|PATIENT|ID|MEDICAL|RECORD|THE|A|AN)$/i;
+    const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH)$/i;
 
     const patterns = [
       /\bM\s*R\s*N\s*-\s*([A-Z0-9]{3,12})\b/i,
@@ -1364,7 +1365,13 @@
   function detectMRNFromText(text) {
     if (!text || typeof text !== 'string') return null;
 
-    const excludeWords = /^(NUMBER|IS|MRN|PATIENT|ID|MEDICAL|RECORD|THE|A|AN)$/i;
+    // Pre-process: Replace spoken words before detection and clean up spacing
+    let preprocessed = text
+      .replace(/\bDASH\b/gi, '-')
+      .replace(/\bHYPHEN\b/gi, '-')
+      .replace(/\s*-\s*/g, '-');  // Remove spaces around hyphens
+
+    const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH)$/i;
 
     const variations = [
       // "MRN number is MRN AB123" - capture after second "MRN"
@@ -1375,20 +1382,34 @@
       /\bMRN\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
       // "Patient ID is MRN AB123"
       /\bPATIENT\s+ID\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
+      // "MRNA BA121" - handle misheard "MRN A" as "MRNA"
+      /\bMRNA\s+([A-Z0-9]{3,12})\b/i,
       // "MRN is AB123"
       /\bMRN\s+IS\s+([A-Z0-9]{3,12})\b/i,
-      // "MRN-AB123" (with hyphen)
-      /\bMRN-([A-Z0-9]{3,12})\b/i,
-      // "MRN AB123" (with space, but not followed by common words)
+      // "MRN-0001 ABC" - capture code with space after hyphen (spoken as "MRN hyphen 0001 ABC")
+      /\bMRN-([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
+      // "MRN AB123" (with space)
       /\bMRN\s+([A-Z0-9]{3,12})\b/i,
       // "M R N AB123"
       /\bM\s+R\s+N\s+([A-Z0-9]{3,12})\b/i,
     ];
 
+    // Try patterns on preprocessed text first
+    for (const pattern of variations) {
+      const match = preprocessed.match(pattern);
+      if (match && match[1]) {
+        let code = match[1].trim().toUpperCase().replace(/\s+/g, '');
+        if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
+          return `MRN-${code}`;
+        }
+      }
+    }
+
+    // Fallback to original text
     for (const pattern of variations) {
       const match = text.match(pattern);
       if (match && match[1]) {
-        const code = match[1].trim().toUpperCase();
+        let code = match[1].trim().toUpperCase().replace(/\s+/g, '');
         if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
           return `MRN-${code}`;
         }
