@@ -204,16 +204,18 @@ Chief complaint is headache"></textarea>
         .replace(/\bDASH\b/gi, '-')
         .replace(/\bHYPHEN\b/gi, '-');
 
+      const excludeWords = /^(NUMBER|IS|MRN|PATIENT|ID|MEDICAL|RECORD|THE|A|AN)$/i;
+
       const patterns = [
-        /\bM\s*R\s*N\s*-?\s*([A-Z0-9]{3,12})\b/i,
-        /\bMRN\s*-?\s*([A-Z0-9]{3,12})\b/i,
+        /\bM\s*R\s*N\s*-\s*([A-Z0-9]{3,12})\b/i,
+        /\bMRN-([A-Z0-9]{3,12})\b/i,
       ];
 
       for (const pattern of patterns) {
         const match = normalized.match(pattern);
         if (match && match[1]) {
           const code = match[1].replace(/\s+/g, '');
-          if (/^[A-Z0-9]{3,12}$/.test(code)) {
+          if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
             return `MRN-${code}`;
           }
         }
@@ -225,25 +227,31 @@ Chief complaint is headache"></textarea>
     function detectMRNFromText(text) {
       if (!text || typeof text !== 'string') return null;
 
-      const normalized = normalizeMRN(text);
-      if (normalized) return normalized;
+      const excludeWords = /^(NUMBER|IS|MRN|PATIENT|ID|MEDICAL|RECORD|THE|A|AN)$/i;
 
       const variations = [
-        /\bm\.?\s*r\.?\s*n\.?\s*[-:]?\s*([a-z0-9]{3,12})\b/i,
-        /\bMRN\s+([A-Z0-9]{3,12})\b/i,
+        /\bMRN\s+NUMBER\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
+        /\bMEDICAL\s+RECORD\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
+        /\bMRN\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
+        /\bPATIENT\s+ID\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
+        /\bMRN\s+IS\s+([A-Z0-9]{3,12})\b/i,
         /\bMRN-([A-Z0-9]{3,12})\b/i,
+        /\bMRN\s+([A-Z0-9]{3,12})\b/i,
         /\bM\s+R\s+N\s+([A-Z0-9]{3,12})\b/i,
       ];
 
       for (const pattern of variations) {
         const match = text.match(pattern);
         if (match && match[1]) {
-          const code = match[1].replace(/\s+/g, '').toUpperCase();
-          if (/^[A-Z0-9]{3,12}$/.test(code)) {
+          const code = match[1].trim().toUpperCase();
+          if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
             return `MRN-${code}`;
           }
         }
       }
+
+      const normalized = normalizeMRN(text);
+      if (normalized) return normalized;
 
       return null;
     }
@@ -276,6 +284,10 @@ Chief complaint is headache"></textarea>
         { input: 'M R N - AB123', expected: 'MRN-AB123', description: 'Fully spaced' },
         { input: 'mrn dash ab123', expected: 'MRN-AB123', description: 'All lowercase with dash' },
         { input: 'MRN  AB123', expected: 'MRN-AB123', description: 'Multiple spaces' },
+        { input: 'My patient MRN number is MRN AB123', expected: 'MRN-AB123', description: 'Real-world: MRN number is MRN AB123' },
+        { input: 'MRN number is AB123', expected: 'MRN-AB123', description: 'MRN number is format' },
+        { input: 'Patient ID is MRN XYZ789', expected: 'MRN-XYZ789', description: 'Patient ID is MRN format' },
+        { input: 'Medical record number is AB123', expected: 'MRN-AB123', description: 'Medical record number format' },
         { input: 'MR-AB123', expected: null, description: 'Invalid prefix (should fail)' },
         { input: 'MRN-AB', expected: null, description: 'Too short (should fail)' },
         { input: 'MRN-ABCDEFGHIJKLM', expected: null, description: 'Too long (should fail)' },

@@ -1341,16 +1341,18 @@
       .replace(/\bDASH\b/gi, '-')
       .replace(/\bHYPHEN\b/gi, '-');
 
+    const excludeWords = /^(NUMBER|IS|MRN|PATIENT|ID|MEDICAL|RECORD|THE|A|AN)$/i;
+
     const patterns = [
-      /\bM\s*R\s*N\s*-?\s*([A-Z0-9]{3,12})\b/i,
-      /\bMRN\s*-?\s*([A-Z0-9]{3,12})\b/i,
+      /\bM\s*R\s*N\s*-\s*([A-Z0-9]{3,12})\b/i,
+      /\bMRN-([A-Z0-9]{3,12})\b/i,
     ];
 
     for (const pattern of patterns) {
       const match = normalized.match(pattern);
       if (match && match[1]) {
         const code = match[1].replace(/\s+/g, '');
-        if (/^[A-Z0-9]{3,12}$/.test(code)) {
+        if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
           return `MRN-${code}`;
         }
       }
@@ -1362,25 +1364,39 @@
   function detectMRNFromText(text) {
     if (!text || typeof text !== 'string') return null;
 
-    const normalized = normalizeMRN(text);
-    if (normalized) return normalized;
+    const excludeWords = /^(NUMBER|IS|MRN|PATIENT|ID|MEDICAL|RECORD|THE|A|AN)$/i;
 
     const variations = [
-      /\bm\.?\s*r\.?\s*n\.?\s*[-:]?\s*([a-z0-9]{3,12})\b/i,
-      /\bMRN\s+([A-Z0-9]{3,12})\b/i,
+      // "MRN number is MRN AB123" - capture after second "MRN"
+      /\bMRN\s+NUMBER\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
+      // "Medical record number is AB123"
+      /\bMEDICAL\s+RECORD\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
+      // "MRN number is AB123"
+      /\bMRN\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
+      // "Patient ID is MRN AB123"
+      /\bPATIENT\s+ID\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
+      // "MRN is AB123"
+      /\bMRN\s+IS\s+([A-Z0-9]{3,12})\b/i,
+      // "MRN-AB123" (with hyphen)
       /\bMRN-([A-Z0-9]{3,12})\b/i,
+      // "MRN AB123" (with space, but not followed by common words)
+      /\bMRN\s+([A-Z0-9]{3,12})\b/i,
+      // "M R N AB123"
       /\bM\s+R\s+N\s+([A-Z0-9]{3,12})\b/i,
     ];
 
     for (const pattern of variations) {
       const match = text.match(pattern);
       if (match && match[1]) {
-        const code = match[1].replace(/\s+/g, '').toUpperCase();
-        if (/^[A-Z0-9]{3,12}$/.test(code)) {
+        const code = match[1].trim().toUpperCase();
+        if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
           return `MRN-${code}`;
         }
       }
     }
+
+    const normalized = normalizeMRN(text);
+    if (normalized) return normalized;
 
     return null;
   }
