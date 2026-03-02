@@ -1374,6 +1374,8 @@
     const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH|HI|HELLO|DOCTOR|NOTE|WILL|BE|IN)$/i;
 
     const variations = [
+      // "Patient MRN number MRN ABA 123" - capture after second "MRN" with spaces
+      /\bMRN\s+NUMBER\s+MRN\s+([A-Z]+\s+\d+)/i,
       // "MRN number is MRN AB123" - capture after second "MRN"
       /\bMRN\s+NUMBER\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
       // "Medical record number is AB123"
