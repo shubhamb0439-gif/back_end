@@ -1371,11 +1371,9 @@
       .replace(/\bHYPHEN\b/gi, '-')
       .replace(/\s*-\s*/g, '-');  // Remove spaces around hyphens
 
-    const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH|HI|HELLO|DOCTOR|NOTE|WILL|BE|IN)$/i;
+    const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH)$/i;
 
     const variations = [
-      // "Patient MRN number MRN ABA 123" - capture after second "MRN" with spaces
-      /\bMRN\s+NUMBER\s+MRN\s+([A-Z]+\s+\d+)/i,
       // "MRN number is MRN AB123" - capture after second "MRN"
       /\bMRN\s+NUMBER\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
       // "Medical record number is AB123"
@@ -1394,10 +1392,6 @@
       /\bMRN\s+([A-Z0-9]{3,12})\b/i,
       // "M R N AB123"
       /\bM\s+R\s+N\s+([A-Z0-9]{3,12})\b/i,
-      // "ABA 121" at start - capture standalone code at beginning (3-5 letter prefix + space + digits)
-      /^([A-Z]{2,5}\s+\d{2,6})\b/i,
-      // "AB123" at start - capture alphanumeric code at beginning
-      /^([A-Z]{2,5}\d{2,6})\b/i,
     ];
 
     // Try patterns on preprocessed text first
@@ -4544,15 +4538,6 @@
 
       if (summaryTab && !summaryTab.classList.contains('active')) {
         summaryTab.click();
-
-        // Wait for summary to load, then auto-play audio
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        const playButton = document.querySelector('.ehr-summary-header .speaker-btn');
-        if (playButton) {
-          console.log('[MRN Automation] Auto-playing summary audio');
-          playButton.click();
-        }
       }
 
     } catch (err) {
