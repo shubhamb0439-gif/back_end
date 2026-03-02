@@ -79,6 +79,9 @@
 
     // AI Diagnosis
     AI_DIAGNOSIS_ENDPOINT: '/ehr/ai/diagnosis',
+
+    // MRN Auto-detection
+    MRN_AUTOMATION_DELAY_MS: 1200,
   };
 
   const state = {
@@ -160,6 +163,11 @@
     // Summary cache invalidation on note edits
     noteTouchedAtByMrn: new Map(),
     lastNoteTouchedAt: 0,
+
+    // MRN auto-detection state
+    lastProcessedMrn: null,
+    mrnAutomationInProgress: false,
+    mrnAutomationTimer: null,
   };
 
   // =====================================================================================
@@ -1316,6 +1324,67 @@
     }
   }
 
+  // =====================================================================================
+  //  MRN DETECTION & NORMALIZATION
+  // =====================================================================================
+
+  function normalizeMRN(rawInput) {
+    if (!rawInput || typeof rawInput !== 'string') return null;
+
+    let normalized = rawInput
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .replace(/\s*-\s*/g, '-');
+
+    normalized = normalized
+      .replace(/\bDASH\b/gi, '-')
+      .replace(/\bHYPHEN\b/gi, '-');
+
+    const patterns = [
+      /\bM\s*R\s*N\s*-?\s*([A-Z0-9]{3,12})\b/i,
+      /\bMRN\s*-?\s*([A-Z0-9]{3,12})\b/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (match && match[1]) {
+        const code = match[1].replace(/\s+/g, '');
+        if (/^[A-Z0-9]{3,12}$/.test(code)) {
+          return `MRN-${code}`;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function detectMRNFromText(text) {
+    if (!text || typeof text !== 'string') return null;
+
+    const normalized = normalizeMRN(text);
+    if (normalized) return normalized;
+
+    const variations = [
+      /\bm\.?\s*r\.?\s*n\.?\s*[-:]?\s*([a-z0-9]{3,12})\b/i,
+      /\bMRN\s+([A-Z0-9]{3,12})\b/i,
+      /\bMRN-([A-Z0-9]{3,12})\b/i,
+      /\bM\s+R\s+N\s+([A-Z0-9]{3,12})\b/i,
+    ];
+
+    for (const pattern of variations) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        const code = match[1].replace(/\s+/g, '').toUpperCase();
+        if (/^[A-Z0-9]{3,12}$/.test(code)) {
+          return `MRN-${code}`;
+        }
+      }
+    }
+
+    return null;
+  }
+
   // Auto-detect note type and MRN from transcript text
   function autoDetectFromTranscript(text) {
     const textLower = text.toLowerCase();
@@ -1331,30 +1400,9 @@
       result.noteType = CONFIG.SOAP_NOTE_TEMPLATE_ID;
     }
 
-    // Detect MRN - look for patterns like "MRN 12345" or "MRN: 12345" or "medical record number 12345"
-    const mrnPatterns = [
-      /\bm\.?r\.?n\.?\s*:?\s*([a-z0-9]+)/i,
-      /\bmedical\s+record\s+number\s*:?\s*([a-z0-9]+)/i,
-      /\bpatient\s+id\s*:?\s*([a-z0-9]+)/i
-    ];
-
-    for (const pattern of mrnPatterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        let detectedMrn = match[1].trim().toUpperCase();
-
-        // Convert to MRNAB123 format if it's just a number
-        if (/^\d+$/.test(detectedMrn)) {
-          result.mrn = `MRNAB${detectedMrn}`;
-        } else if (!detectedMrn.startsWith('MRN')) {
-          // If it has letters but doesn't start with MRN, add MRNAB prefix
-          result.mrn = `MRNAB${detectedMrn}`;
-        } else {
-          // Already has MRN prefix or is in correct format
-          result.mrn = detectedMrn;
-        }
-        break;
-      }
+    const detectedMrn = detectMRNFromText(text);
+    if (detectedMrn) {
+      result.mrn = detectedMrn;
     }
 
     return result;
@@ -1403,13 +1451,8 @@
       clearAiDiagnosisPaneUi();
     }
 
-    // Auto-search MRN if detected
-    if (detected.mrn && dom.mrnInput) {
-      dom.mrnInput.value = detected.mrn;
-      // Trigger the search
-      if (dom.mrnSearchButton) {
-        dom.mrnSearchButton.click();
-      }
+    if (detected.mrn) {
+      automateEHRWorkflow(detected.mrn);
     }
   }
 
@@ -3206,6 +3249,13 @@
       const sequence = ++state.transcriptSequence;
       appendTranscriptItem({ from, to, text: text.trim(), timestamp, sequence });
 
+      if (state.mrnAutomationTimer) {
+        clearTimeout(state.mrnAutomationTimer);
+      }
+      state.mrnAutomationTimer = setTimeout(() => {
+        continuousMRNDetection();
+      }, 500);
+
       return;
     }
 
@@ -3999,6 +4049,13 @@
     state.currentNotes = [];
     state.noteCache.clear();
 
+    state.lastProcessedMrn = null;
+    state.mrnAutomationInProgress = false;
+    if (state.mrnAutomationTimer) {
+      clearTimeout(state.mrnAutomationTimer);
+      state.mrnAutomationTimer = null;
+    }
+
     // UI back to "Enter MRN" but keep sidebar open if it was already open
     if (dom.ehrInitialState) dom.ehrInitialState.style.display = 'flex';
     if (dom.ehrPatientState) dom.ehrPatientState.style.display = 'none';
@@ -4036,6 +4093,13 @@
     try { state.summaryCacheByMrn.clear(); } catch { }
     try { state.noteTouchedAtByMrn.clear(); } catch { }
     state.lastNoteTouchedAt = 0;
+
+    state.lastProcessedMrn = null;
+    state.mrnAutomationInProgress = false;
+    if (state.mrnAutomationTimer) {
+      clearTimeout(state.mrnAutomationTimer);
+      state.mrnAutomationTimer = null;
+    }
 
     // close + UI back to "Enter MRN"
     dom.ehrSidebar.classList.remove('active');
@@ -4386,6 +4450,89 @@
     }
   }
 
+
+  // =====================================================================================
+  //  MRN AUTO-DETECTION & EHR AUTOMATION
+  // =====================================================================================
+
+  async function automateEHRWorkflow(mrn) {
+    if (!mrn || state.mrnAutomationInProgress) return;
+
+    if (state.mrnAutomationTimer) {
+      clearTimeout(state.mrnAutomationTimer);
+      state.mrnAutomationTimer = null;
+    }
+
+    if (state.lastProcessedMrn === mrn) {
+      return;
+    }
+
+    state.mrnAutomationInProgress = true;
+    state.lastProcessedMrn = mrn;
+
+    try {
+      if (!dom.ehrSidebar || !dom.ehrOverlay || !dom.mrnInput) {
+        return;
+      }
+
+      const isOpen = dom.ehrSidebar.classList.contains('active');
+      if (!isOpen) {
+        dom.ehrSidebar.classList.add('active');
+        dom.ehrOverlay.classList.add('active');
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      if (dom.mrnInput) {
+        dom.mrnInput.value = mrn;
+        dom.mrnInput.dispatchEvent(new Event('input', { bubbles: true }));
+        dom.mrnInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      if (dom.mrnSearchButton) {
+        dom.mrnSearchButton.click();
+      }
+
+      await new Promise(resolve => setTimeout(resolve, CONFIG.MRN_AUTOMATION_DELAY_MS));
+
+      const summaryTab = Array.from(document.querySelectorAll('.ehr-note-item'))
+        .find(el => el.textContent.trim() === 'Summary');
+
+      if (summaryTab && !summaryTab.classList.contains('active')) {
+        summaryTab.click();
+      }
+
+    } catch (err) {
+      console.warn('[MRN Automation] Failed:', err);
+    } finally {
+      state.mrnAutomationInProgress = false;
+    }
+  }
+
+  function continuousMRNDetection() {
+    try {
+      const hist = normalizeHistoryItems(loadHistory());
+      if (!hist || hist.length === 0) return;
+
+      const recentItems = hist.slice(-5);
+
+      for (let i = recentItems.length - 1; i >= 0; i--) {
+        const item = recentItems[i];
+        if (!item || !item.text) continue;
+
+        const detectedMrn = detectMRNFromText(item.text);
+        if (detectedMrn) {
+          if (state.lastProcessedMrn !== detectedMrn) {
+            automateEHRWorkflow(detectedMrn);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Continuous MRN Detection] Error:', err);
+    }
+  }
 
   async function searchMRN() {
     if (!dom.mrnInput || !dom.mrnSearchButton) return;
