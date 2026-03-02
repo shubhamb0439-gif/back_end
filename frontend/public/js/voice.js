@@ -212,9 +212,12 @@ export class VoiceController {
 
   /**
    * Format MRN numbers in transcript text
-   * Converts spoken MRN patterns to formatted MRN-XXXXXX format
+   * Converts spoken MRN patterns to formatted MRN-XXXXXX format (NO SPACES)
    * Examples: "mrn aba 121" -> "MRN-ABA121"
-   *           "m r n zero zero zero one a b c" -> "MRN-0001ABC"
+   *           "MRNA BA121" -> "MRN-BA121"
+   *           "m r n zero zero one a b c" -> "MRN-001ABC"
+   *
+   * CRITICAL: Output format is ALWAYS "MRN-" + alphanumeric code with NO SPACES
    */
   _formatMRN(text) {
     if (!text) return text;
@@ -225,16 +228,28 @@ export class VoiceController {
     };
 
     // Exclude common words that shouldn't be part of MRN
-    const excludeWords = /^(is|the|number|patient|id|medical|record|an|dash|hyphen|mrn)$/i;
+    const excludeWords = /^(is|the|number|patient|id|medical|record|an|dash|hyphen|mrn|hi|doctor|hello)$/i;
 
     let formatted = text;
+
+    // Pattern 0: "MRNA BA121" - handle speech recognition mishearing "MRN A" as "MRNA"
+    formatted = formatted.replace(
+      /\bMRNA\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)\b/gi,
+      (match, code) => {
+        const cleanCode = code.trim().replace(/\s+/g, '').toUpperCase();
+        if (cleanCode.length >= 3 && cleanCode.length <= 12 && !excludeWords.test(cleanCode)) {
+          return `MRN-${cleanCode}`;
+        }
+        return match;
+      }
+    );
 
     // Pattern 1: "MRN number is MRN ABA121" - handle redundant MRN
     formatted = formatted.replace(
       /\b(?:m\s*r\s*n|mrn)\s+number\s+is\s+(?:m\s*r\s*n|mrn)\s+([a-z0-9\s]+)\b/gi,
       (match, code) => {
         const cleanCode = code.trim().replace(/\s+/g, '').toUpperCase();
-        if (cleanCode.length >= 3 && cleanCode.length <= 12) {
+        if (cleanCode.length >= 3 && cleanCode.length <= 12 && !excludeWords.test(cleanCode)) {
           return `MRN-${cleanCode}`;
         }
         return match;
@@ -246,11 +261,14 @@ export class VoiceController {
       /\b(m\s*r\s*n|mrn)\s+(?:number\s+)?is\s+((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|[a-z0-9])[\s]*)+)\b/gi,
       (match, prefix, code) => {
         const words = code.trim().split(/\s+/);
-        const converted = words.map(w => {
-          const lower = w.toLowerCase();
-          if (numberWords[lower]) return numberWords[lower];
-          return w.toUpperCase();
-        }).join('');
+        const converted = words
+          .filter(w => w && !excludeWords.test(w))
+          .map(w => {
+            const lower = w.toLowerCase();
+            if (numberWords[lower]) return numberWords[lower];
+            return w.toUpperCase();
+          })
+          .join('');
 
         if (converted.length >= 3 && converted.length <= 12) {
           return `MRN-${converted}`;
@@ -268,7 +286,7 @@ export class VoiceController {
         const words = codeRaw.trim().split(/[\s\-]+/);
 
         // Stop at common stop words
-        const stopWords = /^(on|in|at|to|for|with|from|by|of|off|file|patient|arrived|was|has|note|consultation|and|or|the)$/i;
+        const stopWords = /^(on|in|at|to|for|with|from|by|of|off|file|patient|arrived|was|has|note|consultation|and|or|the|hi|doctor|hello)$/i;
         const validWords = [];
 
         for (const w of words) {
@@ -277,7 +295,7 @@ export class VoiceController {
           if (!excludeWords.test(w)) validWords.push(w);
         }
 
-        // Convert number words and single letters
+        // Convert number words and single letters - JOIN WITH NO SPACES
         const cleanCode = validWords
           .map(w => {
             const lower = w.toLowerCase();
@@ -288,12 +306,12 @@ export class VoiceController {
             // Multi-character string - keep all characters
             return w.toUpperCase();
           })
-          .join('')
-          .replace(/[^A-Z0-9]/g, '');
+          .join('') // JOIN WITH NO SPACES - CRITICAL!
+          .replace(/[^A-Z0-9]/g, ''); // Remove any non-alphanumeric chars
 
         // Only format if we have a valid code (3-12 chars)
         if (cleanCode.length >= 3 && cleanCode.length <= 12) {
-          return `MRN-${cleanCode}`;
+          return `MRN-${cleanCode}`; // Format: MRN-XXXXXX (no spaces)
         }
         return match; // Return original if invalid
       }

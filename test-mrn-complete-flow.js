@@ -10,9 +10,21 @@ function formatMRN(text) {
     'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
   };
 
-  const excludeWords = /^(is|the|number|patient|id|medical|record|an|dash|hyphen|mrn)$/i;
+  const excludeWords = /^(is|the|number|patient|id|medical|record|an|dash|hyphen|mrn|hi|doctor|hello)$/i;
 
   let formatted = text;
+
+  // Pattern 0: "MRNA BA121" - handle speech recognition mishearing "MRN A" as "MRNA"
+  formatted = formatted.replace(
+    /\bMRNA\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)\b/gi,
+    (match, code) => {
+      const cleanCode = code.trim().replace(/\s+/g, '').toUpperCase();
+      if (cleanCode.length >= 3 && cleanCode.length <= 12 && !excludeWords.test(cleanCode)) {
+        return `MRN-${cleanCode}`;
+      }
+      return match;
+    }
+  );
 
   // Pattern 1: "MRN number is MRN ABA121" - handle redundant MRN
   formatted = formatted.replace(
@@ -31,11 +43,14 @@ function formatMRN(text) {
     /\b(m\s*r\s*n|mrn)\s+(?:number\s+)?is\s+((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|[a-z0-9])[\s]*)+)\b/gi,
     (match, prefix, code) => {
       const words = code.trim().split(/\s+/);
-      const converted = words.map(w => {
-        const lower = w.toLowerCase();
-        if (numberWords[lower]) return numberWords[lower];
-        return w.toUpperCase();
-      }).join('');
+      const converted = words
+        .filter(w => w && !excludeWords.test(w))
+        .map(w => {
+          const lower = w.toLowerCase();
+          if (numberWords[lower]) return numberWords[lower];
+          return w.toUpperCase();
+        })
+        .join('');
 
       if (converted.length >= 3 && converted.length <= 12) {
         return `MRN-${converted}`;
@@ -50,7 +65,7 @@ function formatMRN(text) {
     (match, prefix, codeRaw) => {
       const words = codeRaw.trim().split(/[\s\-]+/);
 
-      const stopWords = /^(on|in|at|to|for|with|from|by|of|off|file|patient|arrived|was|has|note|consultation|and|or|the)$/i;
+      const stopWords = /^(on|in|at|to|for|with|from|by|of|off|file|patient|arrived|was|has|note|consultation|and|or|the|hi|doctor|hello)$/i;
       const validWords = [];
 
       for (const w of words) {
@@ -171,6 +186,21 @@ const testCases = [
     spoken: "the patient has mrn abc 456 on file",
     expected: "MRN-ABC456",
     description: "MRN in middle of sentence"
+  },
+  {
+    spoken: "MRNA BA121",
+    expected: "MRN-BA121",
+    description: "MRNA misheard as single word (from screenshot)"
+  },
+  {
+    spoken: "Disrespected conversation should be in a consultation note. MRNA BA121. Hi doctor, hi patient doctor.",
+    expected: "MRN-BA121",
+    description: "MRNA BA121 in sentence context (exact screenshot scenario)"
+  },
+  {
+    spoken: "MRNA BA121. Hi doctor.",
+    expected: "MRN-BA121",
+    description: "MRNA with punctuation and following text"
   }
 ];
 
