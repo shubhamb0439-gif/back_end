@@ -219,32 +219,85 @@ export class VoiceController {
   _formatMRN(text) {
     if (!text) return text;
 
-    // Pattern 1: "mrn" or "m r n" followed by alphanumeric characters with spaces/dashes
-    // Captures: mrn aba 121, m r n zero zero zero one a b c, etc.
-    let formatted = text.replace(
-      /\b(m\s*r\s*n|mrn)[\s\-]*([\da-z]+(?:[\s\-]+[\da-z]+)*)\b/gi,
-      (match, prefix, code) => {
-        // Remove all spaces and dashes from the code part
-        const cleanCode = code.replace(/[\s\-]+/g, '').toUpperCase();
-        return `MRN-${cleanCode}`;
-      }
-    );
-
-    // Pattern 2: Handle spelled out numbers (zero, one, two, etc.)
     const numberWords = {
       'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
       'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
     };
 
-    // Convert number words within MRN codes
-    formatted = formatted.replace(/MRN-([A-Z0-9\s]+)/gi, (match, code) => {
-      let processedCode = code;
-      Object.entries(numberWords).forEach(([word, digit]) => {
-        const regex = new RegExp(word, 'gi');
-        processedCode = processedCode.replace(regex, digit);
-      });
-      return `MRN-${processedCode.replace(/\s+/g, '')}`;
-    });
+    // Exclude common words that shouldn't be part of MRN
+    const excludeWords = /^(is|the|number|patient|id|medical|record|an|dash|hyphen|mrn)$/i;
+
+    let formatted = text;
+
+    // Pattern 1: "MRN number is MRN ABA121" - handle redundant MRN
+    formatted = formatted.replace(
+      /\b(?:m\s*r\s*n|mrn)\s+number\s+is\s+(?:m\s*r\s*n|mrn)\s+([a-z0-9\s]+)\b/gi,
+      (match, code) => {
+        const cleanCode = code.trim().replace(/\s+/g, '').toUpperCase();
+        if (cleanCode.length >= 3 && cleanCode.length <= 12) {
+          return `MRN-${cleanCode}`;
+        }
+        return match;
+      }
+    );
+
+    // Pattern 2: "MRN is ABA121" or "MRN number is ABA121" (with number words)
+    formatted = formatted.replace(
+      /\b(m\s*r\s*n|mrn)\s+(?:number\s+)?is\s+((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|[a-z0-9])[\s]*)+)\b/gi,
+      (match, prefix, code) => {
+        const words = code.trim().split(/\s+/);
+        const converted = words.map(w => {
+          const lower = w.toLowerCase();
+          if (numberWords[lower]) return numberWords[lower];
+          return w.toUpperCase();
+        }).join('');
+
+        if (converted.length >= 3 && converted.length <= 12) {
+          return `MRN-${converted}`;
+        }
+        return match;
+      }
+    );
+
+    // Pattern 3: "mrn" or "m r n" followed by alphanumeric code or number words
+    // Limit to 3-12 alphanumeric tokens to avoid capturing too much
+    formatted = formatted.replace(
+      /\b(m\s*r\s*n|mrn)\s+((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|[a-z]{1,3}|\d+)[\s\-]*){1,12})/gi,
+      (match, prefix, codeRaw) => {
+        // Split into individual characters/words
+        const words = codeRaw.trim().split(/[\s\-]+/);
+
+        // Stop at common stop words
+        const stopWords = /^(on|in|at|to|for|with|from|by|of|off|file|patient|arrived|was|has|note|consultation|and|or|the)$/i;
+        const validWords = [];
+
+        for (const w of words) {
+          if (!w) continue;
+          if (stopWords.test(w)) break; // Stop collecting at stop words
+          if (!excludeWords.test(w)) validWords.push(w);
+        }
+
+        // Convert number words and single letters
+        const cleanCode = validWords
+          .map(w => {
+            const lower = w.toLowerCase();
+            // Check if it's a number word
+            if (numberWords[lower]) return numberWords[lower];
+            // Single letter - keep as is
+            if (w.length === 1) return w.toUpperCase();
+            // Multi-character string - keep all characters
+            return w.toUpperCase();
+          })
+          .join('')
+          .replace(/[^A-Z0-9]/g, '');
+
+        // Only format if we have a valid code (3-12 chars)
+        if (cleanCode.length >= 3 && cleanCode.length <= 12) {
+          return `MRN-${cleanCode}`;
+        }
+        return match; // Return original if invalid
+      }
+    );
 
     return formatted;
   }

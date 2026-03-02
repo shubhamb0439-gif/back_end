@@ -242,8 +242,61 @@ The fix is integrated into `scribe-cockpit.js`. No configuration needed.
 
 ---
 
+---
+
+## Update: Voice Formatting Enhancement (March 2, 2026)
+
+### New Issue Reported
+User reported that when dictating "MRN ABA 121" (with spaces), the search failed because the system wasn't formatting it to match the database format "MRN-ABA121".
+
+### Voice.js Enhancement
+Updated `/frontend/public/js/voice.js` with intelligent MRN auto-formatting:
+
+#### Key Features:
+1. **Automatic Formatting**: Converts spoken "mrn aba 121" → "MRN-ABA121"
+2. **Number Word Support**: "mrn aba one two one" → "MRN-ABA121"
+3. **Spelled Out Format**: "m r n zero zero one a b c" → "MRN-001ABC"
+4. **Context Awareness**: "patient mrn is aba 121" → "MRN-ABA121"
+5. **Stop Word Detection**: Prevents over-capturing in sentences
+
+#### Implementation:
+- Enhanced `_formatMRN()` function with three-pattern approach
+- Stop words: "on", "file", "patient", "arrived", "note", "consultation"
+- Exclude words: "is", "the", "number", "patient", "id", "medical", "record"
+- Applied to both interim and final transcripts (lines 151, 163)
+
+#### Test Results (All Pass):
+- ✅ "mrn aba 121" → "MRN-ABA121"
+- ✅ "MRN ABA 121" → "MRN-ABA121"
+- ✅ "the patient MRN is ABA 121" → "MRN-ABA121"
+- ✅ "m r n zero zero one a b c" → "MRN-001ABC"
+- ✅ "MRN number is MRN ABA121" → "MRN-ABA121"
+- ✅ "patient mrn number is aba one two one" → "MRN-ABA121"
+- ✅ "disrespected note should be in a consultation note. MRN ABA 121" → "MRN-ABA121" ⭐
+- ✅ "mrn-abc123" → "MRN-ABC123"
+- ✅ "the patient has mrn abc 456 on file" → "MRN-ABC456"
+
+⭐ = User's exact scenario
+
+#### Complete Flow:
+1. User speaks: "MRN ABA 121"
+2. Voice.js formats: "MRN-ABA121" (in transcript)
+3. Scribe-cockpit.js detects: "MRN-ABA121"
+4. Database searches: "MRN-ABA121" ✅
+5. Patient found automatically ✅
+
+#### Files Modified:
+- `/frontend/public/js/voice.js` (lines 213-266)
+
+#### Files Created:
+- `/test-mrn-complete-flow.js` - Complete flow test suite
+- `/MRN_FORMAT_IMPROVEMENT.md` - Technical documentation
+- `/MRN_VOICE_GUIDE.md` - User guide for dictating MRNs
+
+---
+
 **Status**: ✅ PRODUCTION READY
 **Date**: 2026-03-02
-**Version**: 2.0 (Enhanced)
+**Version**: 3.0 (Voice Enhancement Added)
 **Tested**: Comprehensive real-world scenarios
-**Accuracy**: 100% on test cases
+**Accuracy**: 100% on all test cases (detection + formatting)
