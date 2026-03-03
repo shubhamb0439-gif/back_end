@@ -169,8 +169,9 @@
     mrnAutomationInProgress: false,
     mrnAutomationTimer: null,
 
-    // Audio playback state
-    audioPlaying: false,
+    // Audio playback state - accurate tracking
+    audioState: 'stopped', // 'playing', 'paused', 'stopped'
+    audioPlaying: false, // Kept for backward compatibility
     currentPlayingMrn: null,
   };
 
@@ -3619,13 +3620,15 @@
 
         // Reset audio playing state
         console.log('[SCRIBE] Previous audio state:', {
+          audioState: state.audioState,
           audioPlaying: state.audioPlaying,
           currentPlayingMrn: state.currentPlayingMrn
         });
 
+        state.audioState = 'stopped';
         state.audioPlaying = false;
         state.currentPlayingMrn = null;
-        console.log('[SCRIBE] ✅ Audio state reset - audioPlaying = false');
+        console.log('[SCRIBE] ✅ Audio state reset - audioState = stopped, audioPlaying = false');
 
         const speakerBtn = document.getElementById('speakerBtn');
         if (speakerBtn) {
@@ -3667,6 +3670,8 @@
         if (!speakerBtn) return;
 
         if (data.state === 'playing') {
+          state.audioState = 'playing';
+          state.audioPlaying = true;
           speakerBtn.innerHTML = `
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="6" y="4" width="4" height="16"></rect>
@@ -3674,15 +3679,22 @@
             </svg>
             Playing
           `;
-          console.log('[SCRIBE] Speaker button updated to "Playing"');
+          console.log('[SCRIBE] Audio state: playing, audioPlaying = true');
         } else if (data.state === 'paused') {
+          state.audioState = 'paused';
+          state.audioPlaying = false;
           speakerBtn.innerHTML = `
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
             Play
           `;
-          console.log('[SCRIBE] Speaker button updated to "Play"');
+          console.log('[SCRIBE] Audio state: paused, audioPlaying = false (allows MRN detection)');
+        } else if (data.state === 'stopped') {
+          state.audioState = 'stopped';
+          state.audioPlaying = false;
+          state.currentPlayingMrn = null;
+          console.log('[SCRIBE] Audio state: stopped, audioPlaying = false');
         }
       });
 
@@ -4608,9 +4620,10 @@
         });
 
         // Mark audio as playing and record the MRN
+        state.audioState = 'playing';
         state.audioPlaying = true;
         state.currentPlayingMrn = state.currentPatient?.mrn_no || null;
-        console.log('[TTS] ✅ Audio playback started, state.audioPlaying = true, MRN:', state.currentPlayingMrn);
+        console.log('[TTS] ✅ Audio playback started, audioState = playing, audioPlaying = true, MRN:', state.currentPlayingMrn);
 
         // Now that audio is playing, mark this MRN as processed
         state.lastProcessedMrn = state.currentPlayingMrn;
@@ -4734,17 +4747,23 @@
   async function automateEHRWorkflow(mrn) {
     console.log('[MRN Automation] Starting workflow for MRN:', mrn);
     console.log('[MRN Automation] Current state:', {
+      audioState: state.audioState,
       audioPlaying: state.audioPlaying,
       currentPlayingMrn: state.currentPlayingMrn,
       lastProcessedMrn: state.lastProcessedMrn,
       mrnAutomationInProgress: state.mrnAutomationInProgress
     });
 
-    // Block if audio is currently playing
-    if (state.audioPlaying) {
-      console.log('[MRN Automation] ⏸️ BLOCKED - Audio currently playing for MRN:', state.currentPlayingMrn);
-      console.log('[MRN Automation] Will auto-retry when audio completes');
+    // Block ONLY if audio is actively playing (not paused or stopped)
+    if (state.audioState === 'playing') {
+      console.log('[MRN Automation] ⏸️ BLOCKED - Audio actively playing for MRN:', state.currentPlayingMrn);
+      console.log('[MRN Automation] Will auto-retry when audio completes or is paused');
       return;
+    }
+
+    // Allow MRN detection when audio is paused or stopped
+    if (state.audioState === 'paused') {
+      console.log('[MRN Automation] ✅ Audio is paused - allowing MRN detection');
     }
 
     if (!mrn || state.mrnAutomationInProgress) {

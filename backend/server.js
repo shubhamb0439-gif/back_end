@@ -2325,7 +2325,7 @@ app.post('/ehr/ai/text-to-speech', async (req, res) => {
           'xi-api-key': ELEVENLABS_API_KEY
         },
         responseType: 'arraybuffer',
-        timeout: 60000
+        timeout: 180000
       }
     );
 
