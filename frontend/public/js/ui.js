@@ -1417,22 +1417,22 @@ function setupSR() {
         const code = ev?.error || 'unknown';
         console.log('[VoiceRec] Error:', code);
         if (code === 'aborted' || code === 'no-speech' || code === 'audio-capture' || code === 'network') {
-            if (isListening) {
+            if (isListening && rec) {
                 setTimeout(() => {
-                    if (isListening) try { rec.start(); } catch { }
+                    if (isListening && rec) try { rec.start(); } catch { }
                 }, 300);
             }
         }
     };
     rec.onend = () => {
         console.log('[VoiceRec] onend fired, isListening:', isListening);
-        if (isListening) {
+        if (isListening && rec) {
             setTimeout(() => {
-                if (isListening) {
+                if (isListening && rec) {
                     try { rec.start(); } catch (e) {
                         console.warn('[VoiceRec] Restart failed:', e);
                         setTimeout(() => {
-                            if (isListening) try { rec.start(); } catch { }
+                            if (isListening && rec) try { rec.start(); } catch { }
                         }, 500);
                     }
                 }
@@ -1473,62 +1473,62 @@ function processVoiceCommand(cmd) {
     if (/\bnote\b/.test(c)) { onStartRecordingNote(); return; }
     if (/\bcreate\b/.test(c)) { onStopRecordingNote(); return; }
 
-    if (/\bconnect\b/.test(c)) {
-        if (!isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already connected.');
-        return;
-    }
     if (/\bdisconnect\b/.test(c)) {
         if (isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already disconnected.');
         return;
     }
+    if (/\bconnect\b/.test(c)) {
+        if (!isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already connected.');
+        return;
+    }
 
-    // ✅ Voice uses the SAME path as UI buttons (prevents double-trigger)
     if (/\bunmute\b/.test(c)) { if (micMuted) elBtnMute.click(); else msg('Voice', 'Already unmuted.'); return; }
     if (/\bmute\b/.test(c)) { if (!micMuted) elBtnMute.click(); else msg('Voice', 'Already muted.'); return; }
-
-    if (/\bstart\b/.test(c)) { if (!streamActive) elBtnStream.click(); else msg('Voice', 'Stream already active.'); return; }
-    if (/\bstop\b/.test(c)) { if (streamActive) elBtnStream.click(); else msg('Voice', 'Stream already stopped.'); return; }
 
     if (/\bhide\b/.test(c)) { if (videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already hidden.'); return; }
     if (/\bshow\b/.test(c)) { if (!videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already shown.'); return; }
 
-    // Audio playback controls
-    if (/\bplay\b/.test(c) || /\bresume\b/.test(c)) {
-        if (currentAudio && currentAudio.paused && !currentAudio.ended) {
-            toggleAudioPlayback();
-            msg('Voice', 'Resuming audio playback');
-            if (orbUI) orbUI.updateResponse('Resuming audio playback', false);
-        } else if (!currentAudio) {
-            msg('Voice', 'No audio available to play');
-            if (orbUI) orbUI.updateResponse('No audio available', false);
-        } else if (currentAudio.ended) {
-            msg('Voice', 'Audio has finished playing');
-            if (orbUI) orbUI.updateResponse('Audio has finished', false);
-        } else {
-            msg('Voice', 'Audio is already playing');
-            if (orbUI) orbUI.updateResponse('Audio already playing', false);
+    const isAudioCmd = /\bpause\b/.test(c) || /\bresume\b/.test(c) || /\bplay\b/.test(c) ||
+                       /\bstop.*(audio|play|music|sound)\b/.test(c) ||
+                       /\b(audio|play|music|sound).*stop\b/.test(c);
+
+    if (isAudioCmd || (/\bpause\b/.test(c) || /\bresume\b/.test(c))) {
+        if (/\bpause\b/.test(c) || /\bstop.*(audio|play|music|sound)\b/.test(c)) {
+            if (currentAudio && !currentAudio.paused && !currentAudio.ended) {
+                toggleAudioPlayback();
+                msg('Voice', 'Pausing audio');
+                if (orbUI) orbUI.updateResponse('Pausing audio', false);
+            } else if (!currentAudio) {
+                msg('Voice', 'No audio to pause');
+            } else {
+                msg('Voice', 'Audio already paused');
+            }
+            return;
         }
-        return;
-    }
-    if (/\bpause\b/.test(c)) {
-        if (currentAudio && !currentAudio.paused && !currentAudio.ended) {
-            toggleAudioPlayback();
-            msg('Voice', 'Pausing audio playback');
-            if (orbUI) orbUI.updateResponse('Pausing audio playback', false);
-        } else if (!currentAudio) {
-            msg('Voice', 'No audio available to pause');
-            if (orbUI) orbUI.updateResponse('No audio available', false);
-        } else if (currentAudio.ended) {
-            msg('Voice', 'Audio has finished playing');
-            if (orbUI) orbUI.updateResponse('Audio has finished', false);
-        } else {
-            msg('Voice', 'Audio is already paused');
-            if (orbUI) orbUI.updateResponse('Audio already paused', false);
+        if (/\bplay\b/.test(c) || /\bresume\b/.test(c)) {
+            if (currentAudio && currentAudio.paused && !currentAudio.ended) {
+                toggleAudioPlayback();
+                msg('Voice', 'Resuming audio');
+                if (orbUI) orbUI.updateResponse('Resuming audio', false);
+            } else if (!currentAudio) {
+                msg('Voice', 'No audio to play');
+            } else if (currentAudio.ended) {
+                msg('Voice', 'Audio has finished');
+            } else {
+                msg('Voice', 'Audio already playing');
+            }
+            return;
         }
-        return;
     }
 
-    msg('Voice', `Unrecognized command: ${cmd}`);
+    if (/\bstart\b/.test(c)) { if (!streamActive) elBtnStream.click(); else msg('Voice', 'Stream already active.'); return; }
+    if (/\bstop\b/.test(c)) { if (streamActive) elBtnStream.click(); else msg('Voice', 'Stream already stopped.'); return; }
+
+    if (_wakeSessionActive) {
+        msg('Voice', `Heard: ${cmd}`);
+    } else {
+        msg('Voice', `Unrecognized command: ${cmd}`);
+    }
 }
 
 
@@ -1563,17 +1563,68 @@ let _wakeSessionTimer = null;
 let _wakeSessionActive = false;
 
 function speakPrompt(text) {
+    return new Promise((resolve) => {
+        try {
+            if (!window.speechSynthesis) {
+                console.warn('[TTS] speechSynthesis not available');
+                resolve(false);
+                return;
+            }
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            let resolved = false;
+            const done = (ok) => {
+                if (resolved) return;
+                resolved = true;
+                resolve(ok);
+            };
+
+            utterance.onend = () => {
+                console.log('[TTS] Finished speaking:', text);
+                done(true);
+            };
+            utterance.onerror = (ev) => {
+                console.warn('[TTS] Speech error:', ev?.error);
+                done(false);
+            };
+
+            setTimeout(() => done(false), 4000);
+
+            window.speechSynthesis.speak(utterance);
+            console.log('[TTS] Speaking:', text);
+
+            if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+            }
+        } catch (e) {
+            console.warn('[TTS] Failed to speak:', e);
+            resolve(false);
+        }
+    });
+}
+
+function playTTSBeep() {
     try {
-        if (!window.speechSynthesis) return;
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        window.speechSynthesis.speak(utterance);
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.3);
+        setTimeout(() => ctx.close(), 500);
     } catch (e) {
-        console.warn('[TTS] Failed to speak:', e);
+        console.warn('[TTS] Beep failed:', e);
     }
 }
 
@@ -1618,16 +1669,22 @@ function initWakeListener() {
             _wakeSessionActive = true;
             wakeListener.pause();
 
-            speakPrompt('How can I help you?');
+            playTTSBeep();
 
-            const startDelay = 1200;
-            setTimeout(() => {
+            (async () => {
+                const spoke = await speakPrompt('How can I help you?');
+                console.log('[WakeListener] TTS completed:', spoke);
+
+                if (!_wakeSessionActive) return;
+
+                await new Promise(r => setTimeout(r, spoke ? 300 : 800));
+
                 if (!_wakeSessionActive) return;
                 if (!isListening) {
                     startVoiceRecognition();
                 }
                 resetWakeSessionTimer();
-            }, startDelay);
+            })();
         },
         onError: (err) => {
             console.warn('[WakeListener] Error:', err);

@@ -15,6 +15,10 @@ export class WakeListener {
 
     this._cooldownMs = 2000;
     this._lastWakeAt = 0;
+    this._restartAttempts = 0;
+    this._maxRestartAttempts = 10;
+    this._healthCheckTimer = null;
+    this._lastActivityAt = 0;
 
     this._onResult = this._onResult.bind(this);
     this._onEnd = this._onEnd.bind(this);
@@ -38,6 +42,9 @@ export class WakeListener {
     try {
       this._rec.start();
       this._running = true;
+      this._restartAttempts = 0;
+      this._lastActivityAt = Date.now();
+      this._startHealthCheck();
       console.log('[WakeListener] Started listening for "' + this._wakePhrase + '"');
       return true;
     } catch (e) {
@@ -50,6 +57,7 @@ export class WakeListener {
   stop() {
     this._running = false;
     this._paused = false;
+    this._stopHealthCheck();
     if (this._rec) {
       try { this._rec.stop(); } catch {}
     }
@@ -59,6 +67,7 @@ export class WakeListener {
   pause() {
     if (!this._running) return;
     this._paused = true;
+    this._stopHealthCheck();
     if (this._rec) {
       try { this._rec.stop(); } catch {}
     }
@@ -68,7 +77,10 @@ export class WakeListener {
   resume() {
     if (!this._running || this._destroyed) return;
     this._paused = false;
+    this._restartAttempts = 0;
+    this._lastActivityAt = Date.now();
     this._restartRecognizer();
+    this._startHealthCheck();
     console.log('[WakeListener] Resumed');
   }
 
@@ -98,6 +110,8 @@ export class WakeListener {
   }
 
   _onResult(e) {
+    this._lastActivityAt = Date.now();
+    this._restartAttempts = 0;
     if (this._paused || !this._running) return;
 
     for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -126,28 +140,42 @@ export class WakeListener {
     const variants = [
       'hey rhea', 'hey ria', 'hey reya', 'hey rea',
       'a rhea', 'hey rhia', 'hay rhea', 'hey riya',
-      'he rhea', 'hey reia'
+      'he rhea', 'hey reia', 'hey rea', 'hey reha',
+      'hey aria', 'hey areya', 'hey raya', 'hey reeha',
+      'hey reah', 'hey rea', 'heyria', 'heyrhea',
+      'hey rita', 'hey leah', 'hey raha', 'hey reia',
+      'a ria', 'a reya', 'a reha', 'heyreeya',
+      'hey rear', 'hey real', 'hey ray', 'hey re',
+      'hey ree', 'hey ria', 'hey rihya',
+      'hey ria', 'hey reeya', 'hey reeah',
+      'hi rhea', 'hi ria', 'hi reya', 'hi reha', 'hi rea'
     ];
     for (const v of variants) {
       if (normalized.includes(v)) return true;
     }
 
+    if (/\bh?e+y?\s*r[ehi]+a?\b/.test(normalized)) return true;
+
     return false;
   }
 
   _onEnd() {
+    this._lastActivityAt = Date.now();
     if (!this._running || this._destroyed) return;
     if (this._paused) return;
-    this._restartRecognizer();
+    console.log('[WakeListener] onend - restarting...');
+    setTimeout(() => this._restartRecognizer(), 200);
   }
 
   _onRecError(ev) {
     const code = ev?.error || 'unknown';
+    console.log('[WakeListener] Error:', code);
     if (code === 'aborted' && this._paused) return;
 
     const recoverable = ['no-speech', 'aborted', 'audio-capture', 'network'];
     if (this._running && !this._paused && !this._destroyed && recoverable.includes(code)) {
-      setTimeout(() => this._restartRecognizer(), 500);
+      const delay = code === 'no-speech' ? 100 : 500;
+      setTimeout(() => this._restartRecognizer(), delay);
     } else if (!recoverable.includes(code)) {
       this._onError(code);
     }
@@ -155,14 +183,60 @@ export class WakeListener {
 
   _restartRecognizer() {
     if (!this._running || this._paused || this._destroyed) return;
+
+    this._restartAttempts++;
+    if (this._restartAttempts > this._maxRestartAttempts) {
+      console.warn('[WakeListener] Too many restart attempts, rebuilding recognizer...');
+      this._restartAttempts = 0;
+      this._buildRecognizer();
+    }
+
     try {
       this._rec.start();
-    } catch {
+      this._lastActivityAt = Date.now();
+    } catch (e) {
+      const errMsg = e?.message || '';
+      if (errMsg.includes('already started')) {
+        this._restartAttempts = 0;
+        return;
+      }
       setTimeout(() => {
         if (this._running && !this._paused && !this._destroyed) {
-          try { this._buildRecognizer(); this._rec.start(); } catch {}
+          try {
+            this._buildRecognizer();
+            this._rec.start();
+            this._lastActivityAt = Date.now();
+            this._restartAttempts = 0;
+          } catch (e2) {
+            console.warn('[WakeListener] Rebuild+start failed:', e2?.message);
+          }
         }
       }, 1000);
+    }
+  }
+
+  _startHealthCheck() {
+    this._stopHealthCheck();
+    this._healthCheckTimer = setInterval(() => {
+      if (!this._running || this._paused || this._destroyed) return;
+      const silenceMs = Date.now() - this._lastActivityAt;
+      if (silenceMs > 30000) {
+        console.log('[WakeListener] Health check: no activity for', Math.round(silenceMs / 1000), 's - restarting');
+        this._restartAttempts = 0;
+        try { this._rec.stop(); } catch {}
+        setTimeout(() => {
+          this._buildRecognizer();
+          this._restartRecognizer();
+        }, 300);
+        this._lastActivityAt = Date.now();
+      }
+    }, 15000);
+  }
+
+  _stopHealthCheck() {
+    if (this._healthCheckTimer) {
+      clearInterval(this._healthCheckTimer);
+      this._healthCheckTimer = null;
     }
   }
 }
