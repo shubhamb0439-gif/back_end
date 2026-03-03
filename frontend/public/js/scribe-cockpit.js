@@ -4263,8 +4263,6 @@
   }
 
   function resetEHRToSearchState() {
-    if (!dom.ehrSidebar || !dom.ehrOverlay) return;
-
     // stop any running summary UI updates
     try { stopSummaryTimer(); } catch { }
     try {
@@ -4286,7 +4284,8 @@
       state.mrnAutomationTimer = null;
     }
 
-    // UI back to "Enter MRN" but keep sidebar open if it was already open
+    // ALWAYS update UI elements even if sidebar is closed
+    // This ensures correct state when sidebar is opened later
     if (dom.ehrInitialState) dom.ehrInitialState.style.display = 'flex';
     if (dom.ehrPatientState) dom.ehrPatientState.style.display = 'none';
 
@@ -5003,10 +5002,11 @@
           if (currentTranscriptId) {
             const ehrRestored = restoreEHRStateForTranscription(currentTranscriptId);
             if (!ehrRestored) {
+              // No saved state for this transcript - must show search
               resetEHRToSearchState();
             }
-          } else if (!state.currentPatient) {
-            // No active transcript and no patient - show search
+          } else {
+            // No active transcript - always show search
             resetEHRToSearchState();
           }
           dom.ehrSidebar.classList.add('active');
