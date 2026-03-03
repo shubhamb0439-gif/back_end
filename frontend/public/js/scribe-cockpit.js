@@ -4998,6 +4998,10 @@
           dom.ehrSidebar.classList.remove('active');
           dom.ehrOverlay.classList.remove('active');
         } else {
+          // Before opening, check if there's a patient - if not, reset to search state
+          if (!state.currentPatient) {
+            resetEHRToSearchState();
+          }
           dom.ehrSidebar.classList.add('active');
           dom.ehrOverlay.classList.add('active');
         }
