@@ -12,6 +12,7 @@ import WebRtcStreamer from './device.js';
 import TelemetryReporter from './telemetry.js';
 import { Message, appendMessage } from './messages.js';
 import { OrbUIController } from './device-orb-ui.js';
+import { WakeListener } from './wake-listener.js';
 
 // Normalize XR IDs so that "1234" becomes "XR-1234", etc.
 function normalizeXrId(raw) {
@@ -1516,6 +1517,75 @@ if (elBtnVoice) {
         }
     });
 }
+
+// ===================== Wake Listener ("Hey RHEA") =====================
+let wakeListener = null;
+const WAKE_LISTEN_DURATION_MS = 10000;
+let _wakeSessionTimer = null;
+
+function initWakeListener() {
+    if (!WakeListener.isAvailable()) {
+        console.log('[WakeListener] Speech API not available; skipping.');
+        return;
+    }
+
+    wakeListener = new WakeListener({
+        wakePhrase: 'hey rhea',
+        onWake: (transcript) => {
+            console.log('[WakeListener] Activated by:', transcript);
+            if (orbUI) orbUI.updateResponse('Hey RHEA detected - listening...', false);
+
+            wakeListener.pause();
+
+            if (!isListening) {
+                startVoiceRecognition();
+            }
+
+            if (_wakeSessionTimer) clearTimeout(_wakeSessionTimer);
+            _wakeSessionTimer = setTimeout(() => {
+                if (isListening && !orbUI?.isListening) {
+                    stopVoiceRecognition();
+                }
+                wakeListener?.resume();
+                _wakeSessionTimer = null;
+            }, WAKE_LISTEN_DURATION_MS);
+        },
+        onError: (err) => {
+            console.warn('[WakeListener] Error:', err);
+        }
+    });
+
+    const micBtn = document.getElementById('micButton');
+    if (micBtn) {
+        micBtn.addEventListener('touchstart', () => {
+            if (wakeListener?.isRunning()) wakeListener.pause();
+            if (_wakeSessionTimer) { clearTimeout(_wakeSessionTimer); _wakeSessionTimer = null; }
+        }, { passive: true });
+
+        micBtn.addEventListener('touchend', () => {
+            setTimeout(() => { if (wakeListener?.isRunning()) wakeListener.resume(); }, 500);
+        }, { passive: true });
+
+        micBtn.addEventListener('touchcancel', () => {
+            setTimeout(() => { if (wakeListener?.isRunning()) wakeListener.resume(); }, 500);
+        }, { passive: true });
+
+        micBtn.addEventListener('click', () => {
+            if (wakeListener?.isRunning()) {
+                if (isListening) {
+                    wakeListener.pause();
+                } else {
+                    setTimeout(() => wakeListener.resume(), 500);
+                }
+            }
+        });
+    }
+
+    wakeListener.start();
+    console.log('[WakeListener] Initialized and running.');
+}
+
+initWakeListener();
 
 // Recording buttons
 function onStartRecordingNote() {
