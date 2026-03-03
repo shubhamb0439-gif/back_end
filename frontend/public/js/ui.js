@@ -1720,3 +1720,64 @@ if (typeof window !== 'undefined') {
             console.warn('[XRDEVICE] Permission bootstrap failed:', err);
         });
 }
+
+// =============================================================================
+// Voice UI Integration Hooks
+// =============================================================================
+// Bridge existing functionality with the new voice-centric interface
+
+function updateVoiceUI() {
+    if (typeof window === 'undefined' || !window.voiceUI) return;
+
+    try {
+        window.voiceUI.updateStatus(isServerConnected);
+    } catch (err) {
+        console.warn('[VOICE-UI] Update failed:', err);
+    }
+}
+
+const originalMsg = window.msg || msg;
+window.msg = function(sender, text) {
+    originalMsg(sender, text);
+
+    if (typeof window !== 'undefined' && window.voiceUI) {
+        try {
+            if (sender === 'System' || sender === 'Voice') {
+                window.voiceUI.showResponse(text);
+            }
+        } catch (err) {
+            console.warn('[VOICE-UI] showResponse failed:', err);
+        }
+    }
+};
+
+const originalSetStatus = setStatus;
+setStatus = function(connected) {
+    originalSetStatus(connected);
+    updateVoiceUI();
+};
+
+if (elChip) {
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                const text = elChip.textContent || '';
+                if (text && !elChip.hidden && window.voiceUI) {
+                    try {
+                        window.voiceUI.showCommand(text);
+                    } catch (err) {
+                        console.warn('[VOICE-UI] showCommand failed:', err);
+                    }
+                }
+            }
+        }
+    });
+
+    observer.observe(elChip, {
+        childList: true,
+        characterData: true,
+        subtree: true
+    });
+}
+
+updateVoiceUI();

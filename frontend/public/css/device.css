@@ -1,116 +1,371 @@
-/* public/css/device.css
-   Component styles for the Device page.
-   - Reads color/typography tokens from common.css
-   - Responsive across phone → desktop
-*/
+/* public/css/device.css - Voice-Centric Interface */
 
-/* Header */
-.header {
-  display: flex; align-items: center; justify-content: space-between;
-}
-.header h1 { margin: 0; font-size: 24px; }
-
-/* Controls */
-.controls .controls-row {
-  display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0;
-}
-.chip-btn {
-  border: none;
-  background: var(--color-primary);
-  color: var(--md-on-primary);
-  padding: 8px 16px;
-  border-radius: 24px;
-  height: 40px;
-  cursor: pointer;
-  font-weight: 600;
-  box-shadow: var(--shadow-1);
-}
-.chip-btn:active {
-  background: color-mix(in srgb, var(--color-primary) 85%, black);
-}
-
-/* Secondary buttons */
-.btn-outline {
-  background: transparent;
-  color: var(--color-text);
-  border: 1px solid #cfd8dc;
-  border-radius: 22px;
-  padding: 8px 14px;
-  height: 40px;
-  cursor: pointer;
-}
-
-/* Send button */
-.btn-send {
-  background: #1e293b;
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 10px 16px;
-  cursor: pointer;
-}
-.btn-send:active { opacity: .9; }
-
-/* Voice “Heard” chip */
-#chipLastCmd.chip { background: color-mix(in srgb, var(--color-primary) 10%, #eef2ff); }
-
-/* Preview */
-.preview {
-  position: relative;
-  overflow: hidden;
-  height: 200px;
-  display: flex; align-items: center; justify-content: center;
-  background: #000;
+/* Reset body for voice interface */
+body {
+  margin: 0;
   padding: 0;
-}
-.preview video {
-  width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-lg);
-}
-.preview-empty {
-  position: absolute; color: #fff; font-size: 14px;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-/* Messages list */
-.messages h2 { margin: 0 0 8px 0; font-size: 18px; }
-.msg-list {
-  max-height: 300px; overflow: auto; padding: 6px;
-  background: #fff; border-radius: var(--radius-md);
+/* Main voice interface container */
+.voice-interface {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(ellipse at center, #0a0a0a 0%, #000000 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: env(safe-area-inset-top, 20px) 20px env(safe-area-inset-bottom, 20px);
+  box-sizing: border-box;
 }
 
-.msg {
-  padding: 8px 10px; border-radius: 10px; margin: 6px 0;
-  background: #f7f9fb;
-}
-.msg-urgent { background: #ffeaea; }
-.msg-header { font-weight: 600; }
-.msg-timestamp { font-size: 12px; color: var(--color-muted); margin-top: 2px; }
-.msg-text { margin-top: 6px; line-height: 1.35; }
-.msg-badge-urgent {
-  background: var(--color-danger); color: #fff; padding: 2px 6px;
-  border-radius: 6px; font-size: 11px;
+/* Header with logo and status */
+.voice-header {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 10;
 }
 
-/* Composer */
-.composer {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+.voice-logo {
+  height: 40px;
+  width: auto;
+  opacity: 0.9;
 }
-.input {
-  flex: 1; min-width: 200px; height: 40px; padding: 0 10px;
-  border: 1px solid #cfd8dc; border-radius: var(--radius-sm);
-}
-.urgent { display: flex; align-items: center; gap: 6px; color: var(--color-danger); font-weight: 600; }
 
-/* Status overrides (ensure visibility on dark) */
-.status { filter: saturate(1.1); }
-
-/* Layout on wider screens */
-@media (min-width: 820px) {
-  .header { grid-column: 1 / -1; }
-  .controls { grid-column: 1 / -1; }
-  .preview  { grid-column: 1 / -1; height: 260px; }
-  .messages { grid-column: 1 / -1; }
-  .composer { grid-column: 1 / -1; }
+/* Status indicator */
+.voice-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
-@media (min-width: 1100px) {
-  .preview { height: 320px; }
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4444;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.voice-status.status-connected .status-dot {
+  background: #00ff88;
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.5px;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+/* Hidden controls (functionality only) */
+.hidden-controls,
+.hidden-messages {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Voice orb container */
+.voice-orb-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Waveform canvas (live audio visualization) */
+.waveform-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  z-index: 1;
+}
+
+/* Main orb */
+.voice-orb {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+/* Orb glow effect */
+.orb-glow {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at center,
+    rgba(0, 128, 255, 0.4) 0%,
+    rgba(0, 212, 255, 0.2) 30%,
+    transparent 70%);
+  filter: blur(40px);
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+.voice-interface.listening .orb-glow {
+  animation: glow-pulse-active 1.5s ease-in-out infinite;
+  background: radial-gradient(circle at center,
+    rgba(0, 212, 255, 0.6) 0%,
+    rgba(0, 128, 255, 0.3) 30%,
+    transparent 70%);
+}
+
+@keyframes glow-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+@keyframes glow-pulse-active {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Orb ring */
+.orb-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #00d4ff, #0080ff) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rotate-ring 8s linear infinite;
+}
+
+.voice-interface.listening .orb-ring {
+  border-width: 3px;
+  animation: rotate-ring 4s linear infinite, pulse-ring 1.5s ease-in-out infinite;
+}
+
+@keyframes rotate-ring {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.05) rotate(180deg); }
+}
+
+/* Waveform SVG */
+.waveform-svg {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.voice-interface.listening .waveform-svg {
+  opacity: 1;
+}
+
+/* Response area */
+.voice-response {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 60px;
+  margin-bottom: 20px;
+}
+
+.response-icon {
+  width: 24px;
+  height: 24px;
+  color: #00d4ff;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.response-text {
+  flex: 1;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.3px;
+}
+
+/* Voice chip (last heard command) */
+.voice-chip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -120px);
+  background: rgba(0, 212, 255, 0.15);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  z-index: 5;
+  animation: chip-appear 0.3s ease;
+}
+
+@keyframes chip-appear {
+  from { opacity: 0; transform: translate(-50%, -100px) scale(0.9); }
+  to { opacity: 1; transform: translate(-50%, -120px) scale(1); }
+}
+
+/* Microphone button container */
+.voice-mic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+}
+
+.voice-mic-button {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 212, 255, 0.5);
+  background: linear-gradient(135deg, rgba(0, 128, 255, 0.2), rgba(0, 212, 255, 0.15));
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.voice-mic-button:hover {
+  transform: scale(1.05);
+  border-color: rgba(0, 212, 255, 0.8);
+}
+
+.voice-mic-button:active,
+.voice-mic-button.active {
+  transform: scale(0.95);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 128, 255, 0.25));
+  border-color: #00d4ff;
+}
+
+.mic-button-glow {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(0, 212, 255, 0.4), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  filter: blur(15px);
+}
+
+.voice-mic-button:active .mic-button-glow,
+.voice-mic-button.active .mic-button-glow {
+  opacity: 1;
+  animation: mic-glow-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes mic-glow-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.3); opacity: 1; }
+}
+
+.mic-icon {
+  color: #00d4ff;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
+}
+
+.voice-mic-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Responsive adjustments */
+@media (max-width: 375px) {
+  .voice-orb {
+    width: 240px;
+    height: 240px;
+  }
+
+  .waveform-canvas {
+    width: 260px;
+    height: 260px;
+  }
+
+  .voice-mic-button {
+    width: 64px;
+    height: 64px;
+  }
+
+  .mic-icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (min-height: 800px) {
+  .voice-orb {
+    width: 320px;
+    height: 320px;
+  }
+
+  .waveform-canvas {
+    width: 340px;
+    height: 340px;
+  }
+}
+
+/* Old styles for backwards compatibility (hidden) */
+.header,
+.controls,
+.preview,
+.messages,
+.composer,
+.chip,
+.card {
+  display: none !important;
 }
