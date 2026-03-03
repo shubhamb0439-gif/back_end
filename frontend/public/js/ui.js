@@ -1362,206 +1362,93 @@ let conversationBuffer = '';
 function setupSR() {
     SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
     if (!SR) return false;
+    rec = new SR();
+    rec.lang = speechIntentLang;
+    rec.continuous = true;
+    rec.interimResults = true;
 
-    // Only create once
-    if (!rec) {
-        rec = new SR();
-        rec.lang = speechIntentLang;
-        rec.continuous = false; // Single-shot for push-to-talk
-        rec.interimResults = true;
-        rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+        let interim = '';
+        let finalTxt = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            const t = e.results[i][0].transcript.trim();
+            if (e.results[i].isFinal) finalTxt += (finalTxt ? ' ' : '') + t;
+            else interim += (interim ? ' ' : '') + t;
+        }
 
-        rec.onresult = (e) => {
-            let interim = '';
-            let finalTxt = '';
-            for (let i = e.resultIndex; i < e.results.length; i++) {
-                const t = e.results[i][0].transcript.trim();
-                if (e.results[i].isFinal) finalTxt += (finalTxt ? ' ' : '') + t;
-                else interim += (interim ? ' ' : '') + t;
+        if (interim && recordingActive) {
+            elChip.textContent = `Listening: ${interim}`;
+            elChip.hidden = false;
+        }
+
+        if (finalTxt) {
+            const finalLower = finalTxt.toLowerCase();
+            lastRecognizedCommand = finalLower;
+            elChip.textContent = `Heard: ${finalTxt}`;
+            elChip.hidden = false;
+
+            if (/\bcreate\b/.test(finalLower)) {
+                onStopRecordingNote();
+                return;
+            } else if (recordingActive) {
+                noteBuffer += (noteBuffer ? ' ' : '') + finalTxt;
+                conversationBuffer += (conversationBuffer ? ' ' : '') + finalTxt;
+            } else {
+                processVoiceCommand(finalLower);
             }
-
-            if (interim) {
-                elChip.textContent = `${interim}`;
-                elChip.hidden = false;
-
-                if (window.voiceUI) {
-                    try {
-                        window.voiceUI.showResponse(interim);
-                    } catch { }
-                }
-            }
-
-            if (finalTxt) {
-                const finalLower = finalTxt.toLowerCase();
-                lastRecognizedCommand = finalLower;
-                elChip.textContent = `${finalTxt}`;
-                elChip.hidden = false;
-
-                console.log('[VOICE] ✓', finalTxt);
-
-                if (/\bcreate\b/.test(finalLower)) {
-                    onStopRecordingNote();
-                } else if (recordingActive) {
-                    noteBuffer += (noteBuffer ? ' ' : '') + finalTxt;
-                    conversationBuffer += (conversationBuffer ? ' ' : '') + finalTxt;
-                } else {
-                    processVoiceCommand(finalLower);
-                }
-
-                // Hide chip after 2 seconds
-                setTimeout(() => { elChip.hidden = true; }, 2000);
-            }
-        };
-
-        rec.onerror = (event) => {
-            if (event.error === 'aborted' || event.error === 'no-speech') {
-                return; // Ignore these
-            }
-
-            console.log('[VOICE] Error:', event.error);
-
-            if (event.error === 'not-allowed') {
-                msg('System', 'Microphone blocked');
-                isListening = false;
-            } else if (event.error === 'network') {
-                // Ignore network errors - continue
-            }
-        };
-
-        rec.onend = () => {
-            console.log('[VOICE] Stopped');
-            isListening = false;
-            setStatus(isServerConnected);
-
-            if (window.voiceUI) {
-                window.voiceUI.isListening = false;
-                window.voiceUI.voiceInterface?.classList.remove('listening');
-            }
-        };
-
-        rec.onstart = () => {
-            console.log('[VOICE] Listening...');
-            isListening = true;
-        };
-    }
-
+        }
+    };
+    rec.onerror = () => {
+        if (isListening) try { rec.start(); } catch { }
+    };
+    rec.onend = () => {
+        if (isListening) try { rec.start(); } catch { }
+    };
     return true;
 }
 
 function startVoiceRecognition() {
-    if (!setupSR()) {
-        msg('System', 'Voice not available');
-        return false;
-    }
-
-    if (isListening) {
-        console.log('[VOICE] Already active');
-        return false;
-    }
-
-    try {
-        rec.start();
-        return true;
-    } catch (err) {
-        // Handle "already started" error
-        if (err.message && err.message.includes('already started')) {
-            try {
-                rec.stop();
-                setTimeout(() => {
-                    try { rec.start(); } catch { }
-                }, 50);
-            } catch { }
-        }
-        console.log('[VOICE] Start error:', err.message);
-        return false;
-    }
-}
-
-function stopVoiceRecognition() {
-    if (!rec || !isListening) return;
-
-    try {
-        rec.stop();
-    } catch (err) {
-        console.log('[VOICE] Stop error:', err.message);
-    }
-
-    isListening = false;
+    if (!setupSR()) { msg('System', 'Voice API not available in this browser'); return; }
+    if (isListening) return;
+    isListening = true;
+    try { rec.start(); msg('System', 'Voice recognition started'); } catch { msg('System', 'Failed to start voice'); }
     setStatus(isServerConnected);
 }
 
-// Export to window for voice-ui.js
-if (typeof window !== 'undefined') {
-    window.startVoiceRecognition = startVoiceRecognition;
-    window.stopVoiceRecognition = stopVoiceRecognition;
+function stopVoiceRecognition() {
+    if (!isListening) return;
+    isListening = false;
+    try { rec.stop(); msg('System', 'Voice recognition stopped'); } catch { msg('System', 'Failed to stop voice recognition'); }
+    if (recordingActive) finalizeRecordingNote();
+    setStatus(isServerConnected);
 }
 
 function processVoiceCommand(cmd) {
-    const c = cmd.toLowerCase().trim();
-    console.log('[VOICE]', c);
+    const c = cmd.toLowerCase();
 
-    // Fast pattern matching - order matters!
-    if (c.includes('disconnect')) {
-        console.log('[VOICE] → disconnect');
-        if (isServerConnected) elBtnConnect.click();
+    if (/\bnote\b/.test(c)) { onStartRecordingNote(); return; }
+    if (/\bcreate\b/.test(c)) { onStopRecordingNote(); return; }
+
+    if (/\bconnect\b/.test(c)) {
+        if (!isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already connected.');
+        return;
+    }
+    if (/\bdisconnect\b/.test(c)) {
+        if (isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already disconnected.');
         return;
     }
 
-    if (c.includes('connect')) {
-        console.log('[VOICE] → connect');
-        if (!isServerConnected) elBtnConnect.click();
-        return;
-    }
+    // ✅ Voice uses the SAME path as UI buttons (prevents double-trigger)
+    if (/\bunmute\b/.test(c)) { if (micMuted) elBtnMute.click(); else msg('Voice', 'Already unmuted.'); return; }
+    if (/\bmute\b/.test(c)) { if (!micMuted) elBtnMute.click(); else msg('Voice', 'Already muted.'); return; }
 
-    if (c.includes('unmute')) {
-        console.log('[VOICE] → unmute');
-        if (micMuted) elBtnMute.click();
-        return;
-    }
+    if (/\bstart\b/.test(c)) { if (!streamActive) elBtnStream.click(); else msg('Voice', 'Stream already active.'); return; }
+    if (/\bstop\b/.test(c)) { if (streamActive) elBtnStream.click(); else msg('Voice', 'Stream already stopped.'); return; }
 
-    if (c.includes('mute')) {
-        console.log('[VOICE] → mute');
-        if (!micMuted) elBtnMute.click();
-        return;
-    }
+    if (/\bhide\b/.test(c)) { if (videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already hidden.'); return; }
+    if (/\bshow\b/.test(c)) { if (!videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already shown.'); return; }
 
-    if (c.includes('start') && (c.includes('stream') || c.includes('video') || c.includes('camera'))) {
-        console.log('[VOICE] → start stream');
-        if (!streamActive) elBtnStream.click();
-        return;
-    }
-
-    if (c.includes('stop') && (c.includes('stream') || c.includes('video') || c.includes('camera'))) {
-        console.log('[VOICE] → stop stream');
-        if (streamActive) elBtnStream.click();
-        return;
-    }
-
-    if (c.includes('hide') && (c.includes('video') || c.includes('camera'))) {
-        console.log('[VOICE] → hide video');
-        if (videoVisible) elBtnVideo.click();
-        return;
-    }
-
-    if (c.includes('show') && (c.includes('video') || c.includes('camera'))) {
-        console.log('[VOICE] → show video');
-        if (!videoVisible) elBtnVideo.click();
-        return;
-    }
-
-    if (c.includes('note')) {
-        console.log('[VOICE] → note');
-        onStartRecordingNote();
-        return;
-    }
-
-    if (c.includes('create')) {
-        console.log('[VOICE] → create');
-        onStopRecordingNote();
-        return;
-    }
-
-    console.log('[VOICE] ✗ Unknown');
+    msg('Voice', `Unrecognized command: ${cmd}`);
 }
 
 
@@ -1833,78 +1720,3 @@ if (typeof window !== 'undefined') {
             console.warn('[XRDEVICE] Permission bootstrap failed:', err);
         });
 }
-
-// =============================================================================
-// Voice UI Integration Hooks
-// =============================================================================
-// Bridge existing functionality with the new voice-centric interface
-
-function updateVoiceUI() {
-    if (typeof window === 'undefined' || !window.voiceUI) return;
-
-    try {
-        window.voiceUI.updateStatus(isServerConnected);
-    } catch (err) {
-        console.warn('[VOICE-UI] Update failed:', err);
-    }
-}
-
-// Wrap msg function to update voice UI
-const originalMsg = msg;
-function msgWithVoiceUI(sender, text) {
-    originalMsg(sender, text);
-
-    if (typeof window !== 'undefined' && window.voiceUI) {
-        try {
-            if (sender === 'System' || sender === 'Voice') {
-                window.voiceUI.showResponse(text);
-            }
-        } catch (err) {
-            // Silently fail - voice UI is enhancement only
-        }
-    }
-}
-
-// Replace global msg function
-if (typeof window !== 'undefined') {
-    window.msg = msgWithVoiceUI;
-}
-
-// Wrap setStatus to update voice UI
-const originalSetStatus = setStatus;
-function setStatusWithVoiceUI(connected) {
-    originalSetStatus(connected);
-    setTimeout(updateVoiceUI, 100);
-}
-
-// Replace setStatus function
-setStatus = setStatusWithVoiceUI;
-
-// Watch for chip updates
-setTimeout(() => {
-    if (elChip) {
-        const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                    const text = elChip.textContent || '';
-                    if (text && !elChip.hidden && window.voiceUI) {
-                        try {
-                            window.voiceUI.showCommand(text);
-                        } catch (err) {
-                            // Silently fail
-                        }
-                    }
-                }
-            }
-        });
-
-        observer.observe(elChip, {
-            childList: true,
-            characterData: true,
-            subtree: true
-        });
-    }
-}, 1000);
-
-// Initial update after page load
-setTimeout(updateVoiceUI, 1000);
