@@ -61,6 +61,9 @@ export class VoiceController {
     this._noteMode = false;
     this._noteBuffer = '';
 
+    this._continuousMode = false;
+    this._continuousCallback = null;
+
     this._bindHandlers();
   }
 
@@ -107,6 +110,20 @@ export class VoiceController {
   destroy() {
     try { this.stop(); } catch { }
     this._rec = null;
+  }
+
+  startContinuousListening(callback) {
+    this._continuousMode = true;
+    this._continuousCallback = callback;
+    this.start();
+    console.log('[Voice] Continuous listening mode enabled');
+  }
+
+  stopContinuousListening() {
+    this._continuousMode = false;
+    this._continuousCallback = null;
+    this.stop();
+    console.log('[Voice] Continuous listening mode disabled');
   }
 
   // ---------------------- internals ----------------------
@@ -180,6 +197,11 @@ export class VoiceController {
       } else {
         // Deliver final transcript even if no command matched
         this.onTranscript(formattedFinal, true);
+      }
+
+      // If in continuous mode, notify callback with all final transcripts
+      if (this._continuousMode && this._continuousCallback) {
+        this._continuousCallback(formattedFinal);
       }
     }
   }

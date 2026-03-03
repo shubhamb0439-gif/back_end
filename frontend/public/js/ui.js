@@ -1517,6 +1517,50 @@ if (elBtnVoice) {
     });
 }
 
+// Initialize Autonomous Mode
+let autonomousMode = null;
+let wakeWordDetector = null;
+let textToSpeech = null;
+
+if (typeof WakeWordDetector !== 'undefined' && typeof TextToSpeech !== 'undefined' && typeof AutonomousMode !== 'undefined') {
+    wakeWordDetector = new WakeWordDetector();
+    textToSpeech = new TextToSpeech();
+    autonomousMode = new AutonomousMode();
+
+    autonomousMode.initialize(wakeWordDetector, textToSpeech, voiceController);
+
+    autonomousMode.onModeChange = (state) => {
+        console.log('[UI] Autonomous mode state changed:', state);
+        if (orbUI) {
+            orbUI.setAutonomousMode(state);
+            if (state === 'active') {
+                orbUI.showExitHint();
+            } else {
+                orbUI.hideExitHint();
+            }
+        }
+    };
+
+    autonomousMode.onCommandDetected = (command) => {
+        console.log('[UI] Autonomous command detected:', command);
+        onVoiceCommand(command, command);
+    };
+
+    const elToggleAutonomous = document.getElementById('toggleAutonomous');
+    if (elToggleAutonomous) {
+        elToggleAutonomous.addEventListener('click', () => {
+            const enabled = autonomousMode.toggleEnabled();
+            elToggleAutonomous.classList.toggle('enabled', enabled);
+            msg('System', enabled ? 'Autonomous mode enabled. Say "Hey RHEA" to activate.' : 'Autonomous mode disabled.');
+        });
+
+        elToggleAutonomous.classList.add('enabled');
+        autonomousMode.startWakeWordListening();
+    }
+
+    console.log('[UI] Autonomous mode initialized');
+}
+
 // Recording buttons
 function onStartRecordingNote() {
     if (recordingActive) return;
