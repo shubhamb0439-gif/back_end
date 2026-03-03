@@ -1376,9 +1376,17 @@ function setupSR() {
             else interim += (interim ? ' ' : '') + t;
         }
 
-        if (interim && recordingActive) {
+        // Show interim results even when not recording
+        if (interim) {
             elChip.textContent = `Listening: ${interim}`;
             elChip.hidden = false;
+
+            // Update voice UI
+            if (window.voiceUI) {
+                try {
+                    window.voiceUI.showResponse(`Listening: ${interim}`);
+                } catch { }
+            }
         }
 
         if (finalTxt) {
@@ -1387,6 +1395,8 @@ function setupSR() {
             elChip.textContent = `Heard: ${finalTxt}`;
             elChip.hidden = false;
 
+            console.log('[VOICE] Recognized:', finalTxt, '| Lower:', finalLower);
+
             if (/\bcreate\b/.test(finalLower)) {
                 onStopRecordingNote();
                 return;
@@ -1394,24 +1404,74 @@ function setupSR() {
                 noteBuffer += (noteBuffer ? ' ' : '') + finalTxt;
                 conversationBuffer += (conversationBuffer ? ' ' : '') + finalTxt;
             } else {
+                console.log('[VOICE] Processing command:', finalLower);
                 processVoiceCommand(finalLower);
             }
         }
     };
-    rec.onerror = () => {
-        if (isListening) try { rec.start(); } catch { }
+    rec.onerror = (event) => {
+        console.log('[VOICE] Error:', event.error);
+        if (event.error === 'no-speech') {
+            console.log('[VOICE] No speech detected, continuing...');
+        } else if (event.error === 'audio-capture') {
+            msg('System', 'Microphone error. Please check permissions.');
+        } else if (event.error === 'not-allowed') {
+            msg('System', 'Microphone permission denied.');
+            isListening = false;
+            setStatus(isServerConnected);
+            return;
+        }
+        // Auto-restart on recoverable errors
+        if (isListening) {
+            try {
+                setTimeout(() => {
+                    if (isListening && rec) rec.start();
+                }, 100);
+            } catch (e) {
+                console.log('[VOICE] Failed to restart:', e);
+            }
+        }
     };
     rec.onend = () => {
-        if (isListening) try { rec.start(); } catch { }
+        console.log('[VOICE] Recognition ended');
+        // Auto-restart if user wants to keep listening
+        if (isListening) {
+            try {
+                setTimeout(() => {
+                    if (isListening && rec) rec.start();
+                }, 100);
+            } catch (e) {
+                console.log('[VOICE] Failed to restart:', e);
+            }
+        }
+    };
+    rec.onstart = () => {
+        console.log('[VOICE] Recognition started');
     };
     return true;
 }
 
 function startVoiceRecognition() {
-    if (!setupSR()) { msg('System', 'Voice API not available in this browser'); return; }
-    if (isListening) return;
+    console.log('[VOICE] Starting voice recognition...');
+    if (!setupSR()) {
+        msg('System', 'Voice API not available in this browser');
+        console.error('[VOICE] Speech Recognition API not available');
+        return;
+    }
+    if (isListening) {
+        console.log('[VOICE] Already listening');
+        return;
+    }
     isListening = true;
-    try { rec.start(); msg('System', 'Voice recognition started'); } catch { msg('System', 'Failed to start voice'); }
+    try {
+        rec.start();
+        msg('System', 'Listening for voice commands...');
+        console.log('[VOICE] Voice recognition started successfully');
+    } catch (err) {
+        console.error('[VOICE] Failed to start:', err);
+        msg('System', 'Failed to start voice recognition');
+        isListening = false;
+    }
     setStatus(isServerConnected);
 }
 
@@ -1424,31 +1484,111 @@ function stopVoiceRecognition() {
 }
 
 function processVoiceCommand(cmd) {
-    const c = cmd.toLowerCase();
+    const c = cmd.toLowerCase().trim();
+    console.log('[VOICE] Processing:', c);
 
-    if (/\bnote\b/.test(c)) { onStartRecordingNote(); return; }
-    if (/\bcreate\b/.test(c)) { onStopRecordingNote(); return; }
+    // Note commands
+    if (/\bnote\b/.test(c)) {
+        console.log('[VOICE] Matched: note');
+        onStartRecordingNote();
+        return;
+    }
+    if (/\bcreate\b/.test(c)) {
+        console.log('[VOICE] Matched: create');
+        onStopRecordingNote();
+        return;
+    }
 
-    if (/\bconnect\b/.test(c)) {
-        if (!isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already connected.');
+    // Connection commands
+    if (/\bconnect\b/.test(c) && !/disconnect/.test(c)) {
+        console.log('[VOICE] Matched: connect');
+        if (!isServerConnected) {
+            msg('Voice', 'Connecting...');
+            elBtnConnect.click();
+        } else {
+            msg('Voice', 'Already connected.');
+        }
         return;
     }
     if (/\bdisconnect\b/.test(c)) {
-        if (isServerConnected) elBtnConnect.click(); else msg('Voice', 'Already disconnected.');
+        console.log('[VOICE] Matched: disconnect');
+        if (isServerConnected) {
+            msg('Voice', 'Disconnecting...');
+            elBtnConnect.click();
+        } else {
+            msg('Voice', 'Already disconnected.');
+        }
         return;
     }
 
-    // ✅ Voice uses the SAME path as UI buttons (prevents double-trigger)
-    if (/\bunmute\b/.test(c)) { if (micMuted) elBtnMute.click(); else msg('Voice', 'Already unmuted.'); return; }
-    if (/\bmute\b/.test(c)) { if (!micMuted) elBtnMute.click(); else msg('Voice', 'Already muted.'); return; }
+    // Mute commands (check unmute first to avoid matching "mute" in "unmute")
+    if (/\bunmute\b/.test(c)) {
+        console.log('[VOICE] Matched: unmute');
+        if (micMuted) {
+            msg('Voice', 'Unmuting microphone...');
+            elBtnMute.click();
+        } else {
+            msg('Voice', 'Already unmuted.');
+        }
+        return;
+    }
+    if (/\bmute\b/.test(c)) {
+        console.log('[VOICE] Matched: mute');
+        if (!micMuted) {
+            msg('Voice', 'Muting microphone...');
+            elBtnMute.click();
+        } else {
+            msg('Voice', 'Already muted.');
+        }
+        return;
+    }
 
-    if (/\bstart\b/.test(c)) { if (!streamActive) elBtnStream.click(); else msg('Voice', 'Stream already active.'); return; }
-    if (/\bstop\b/.test(c)) { if (streamActive) elBtnStream.click(); else msg('Voice', 'Stream already stopped.'); return; }
+    // Stream commands
+    if (/\bstart\s+(stream|streaming|video|camera)\b/.test(c) || /\bstart\b.*\bstream\b/.test(c)) {
+        console.log('[VOICE] Matched: start stream');
+        if (!streamActive) {
+            msg('Voice', 'Starting stream...');
+            elBtnStream.click();
+        } else {
+            msg('Voice', 'Stream already active.');
+        }
+        return;
+    }
+    if (/\bstop\s+(stream|streaming|video|camera)\b/.test(c) || /\bstop\b.*\bstream\b/.test(c)) {
+        console.log('[VOICE] Matched: stop stream');
+        if (streamActive) {
+            msg('Voice', 'Stopping stream...');
+            elBtnStream.click();
+        } else {
+            msg('Voice', 'Stream already stopped.');
+        }
+        return;
+    }
 
-    if (/\bhide\b/.test(c)) { if (videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already hidden.'); return; }
-    if (/\bshow\b/.test(c)) { if (!videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already shown.'); return; }
+    // Video visibility commands
+    if (/\bhide\s+(video|camera)\b/.test(c) || /\bhide\b.*\bvideo\b/.test(c)) {
+        console.log('[VOICE] Matched: hide video');
+        if (videoVisible) {
+            msg('Voice', 'Hiding video...');
+            elBtnVideo.click();
+        } else {
+            msg('Voice', 'Video already hidden.');
+        }
+        return;
+    }
+    if (/\bshow\s+(video|camera)\b/.test(c) || /\bshow\b.*\bvideo\b/.test(c)) {
+        console.log('[VOICE] Matched: show video');
+        if (!videoVisible) {
+            msg('Voice', 'Showing video...');
+            elBtnVideo.click();
+        } else {
+            msg('Voice', 'Video already shown.');
+        }
+        return;
+    }
 
-    msg('Voice', `Unrecognized command: ${cmd}`);
+    console.log('[VOICE] No command matched for:', c);
+    msg('Voice', `Command not recognized: "${cmd}"`);
 }
 
 
@@ -1736,8 +1876,9 @@ function updateVoiceUI() {
     }
 }
 
-const originalMsg = window.msg || msg;
-window.msg = function(sender, text) {
+// Wrap msg function to update voice UI
+const originalMsg = msg;
+function msgWithVoiceUI(sender, text) {
     originalMsg(sender, text);
 
     if (typeof window !== 'undefined' && window.voiceUI) {
@@ -1746,38 +1887,51 @@ window.msg = function(sender, text) {
                 window.voiceUI.showResponse(text);
             }
         } catch (err) {
-            console.warn('[VOICE-UI] showResponse failed:', err);
+            // Silently fail - voice UI is enhancement only
         }
     }
-};
+}
 
+// Replace global msg function
+if (typeof window !== 'undefined') {
+    window.msg = msgWithVoiceUI;
+}
+
+// Wrap setStatus to update voice UI
 const originalSetStatus = setStatus;
-setStatus = function(connected) {
+function setStatusWithVoiceUI(connected) {
     originalSetStatus(connected);
-    updateVoiceUI();
-};
+    setTimeout(updateVoiceUI, 100);
+}
 
-if (elChip) {
-    const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-            if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                const text = elChip.textContent || '';
-                if (text && !elChip.hidden && window.voiceUI) {
-                    try {
-                        window.voiceUI.showCommand(text);
-                    } catch (err) {
-                        console.warn('[VOICE-UI] showCommand failed:', err);
+// Replace setStatus function
+setStatus = setStatusWithVoiceUI;
+
+// Watch for chip updates
+setTimeout(() => {
+    if (elChip) {
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    const text = elChip.textContent || '';
+                    if (text && !elChip.hidden && window.voiceUI) {
+                        try {
+                            window.voiceUI.showCommand(text);
+                        } catch (err) {
+                            // Silently fail
+                        }
                     }
                 }
             }
-        }
-    });
+        });
 
-    observer.observe(elChip, {
-        childList: true,
-        characterData: true,
-        subtree: true
-    });
-}
+        observer.observe(elChip, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+    }
+}, 1000);
 
-updateVoiceUI();
+// Initial update after page load
+setTimeout(updateVoiceUI, 1000);

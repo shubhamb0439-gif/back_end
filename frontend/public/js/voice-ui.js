@@ -107,20 +107,27 @@ class VoiceUI {
     if (this.isListening) return;
 
     try {
+      // Start the actual voice recognition system
       const btnVoice = document.getElementById('btnVoice');
       if (btnVoice && btnVoice.textContent === 'Start Voice') {
         btnVoice.click();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Start waveform visualization with a separate audio stream
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      if (this.audioContext && this.analyser) {
-        if (this.audioContext.state === 'suspended') {
-          await this.audioContext.resume();
+        if (this.audioContext && this.analyser) {
+          if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+          }
+
+          this.microphone = this.audioContext.createMediaStreamSource(stream);
+          this.microphone.connect(this.analyser);
         }
-
-        this.microphone = this.audioContext.createMediaStreamSource(stream);
-        this.microphone.connect(this.analyser);
+      } catch (audioErr) {
+        console.warn('[VOICE-UI] Waveform visualization unavailable:', audioErr);
+        // Continue anyway - voice recognition might still work
       }
 
       this.isListening = true;
@@ -293,14 +300,17 @@ class VoiceUI {
   updateStatus(isConnected) {
     if (!this.statusElement) return;
 
+    const statusText = this.statusElement.querySelector('.status-text');
+    if (!statusText) return;
+
     if (isConnected) {
       this.statusElement.classList.remove('status-disconnected');
       this.statusElement.classList.add('status-connected');
-      this.statusElement.querySelector('.status-text').textContent = 'Connected';
+      statusText.textContent = 'Connected';
     } else {
       this.statusElement.classList.add('status-disconnected');
       this.statusElement.classList.remove('status-connected');
-      this.statusElement.querySelector('.status-text').textContent = 'Disconnected';
+      statusText.textContent = 'Disconnected';
     }
   }
 
