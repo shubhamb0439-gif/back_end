@@ -2301,7 +2301,7 @@ app.post('/ehr/ai/text-to-speech', async (req, res) => {
       return res.status(500).json({ error: 'ElevenLabs API key not configured' });
     }
 
-    const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
+    const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB';
     const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_monolingual_v1';
 
     console.log('[TTS] Generating audio for text length:', text.length);
