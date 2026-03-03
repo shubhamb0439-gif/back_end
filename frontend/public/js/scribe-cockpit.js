@@ -1345,15 +1345,15 @@
     const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH)$/i;
 
     const patterns = [
-      /\bM\s*R\s*N\s*-\s*([A-Z0-9]{3,12})\b/i,
-      /\bMRN-([A-Z0-9]{3,12})\b/i,
+      /\bM\s*R\s*N\s*-\s*([A-Z0-9]{3,})\b/i,
+      /\bMRN-([A-Z0-9]{3,})\b/i,
     ];
 
     for (const pattern of patterns) {
       const match = normalized.match(pattern);
       if (match && match[1]) {
         const code = match[1].replace(/\s+/g, '');
-        if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
+        if (/^[A-Z0-9]{3,}$/.test(code) && !excludeWords.test(code)) {
           return `MRN-${code}`;
         }
       }
@@ -1372,34 +1372,43 @@
       .replace(/\s*-\s*/g, '-');  // Remove spaces around hyphens
 
     const excludeWords = /^(NUMBER|IS|MRN|MRNA|PATIENT|ID|MEDICAL|RECORD|THE|A|AN|HYPHEN|DASH)$/i;
+    const stopWords = /^(ON|IN|AT|TO|FOR|WITH|FROM|BY|PATIENT|DOCTOR|NOTE|FILE|CONSULTATION|HI|HELLO)$/i;
 
     const variations = [
       // "MRN number is MRN AB123" - capture after second "MRN"
-      /\bMRN\s+NUMBER\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
+      /\bMRN\s+NUMBER\s+IS\s+MRN\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
       // "Medical record number is AB123"
-      /\bMEDICAL\s+RECORD\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
+      /\bMEDICAL\s+RECORD\s+NUMBER\s+IS\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
       // "MRN number is AB123"
-      /\bMRN\s+NUMBER\s+IS\s+([A-Z0-9]{3,12})\b/i,
+      /\bMRN\s+NUMBER\s+IS\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
       // "Patient ID is MRN AB123"
-      /\bPATIENT\s+ID\s+IS\s+MRN\s+([A-Z0-9]{3,12})\b/i,
-      // "MRNA BA121" - handle misheard "MRN A" as "MRNA"
-      /\bMRNA\s+([A-Z0-9]{3,12})\b/i,
+      /\bPATIENT\s+ID\s+IS\s+MRN\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
+      // "MRNA BA121" - handle misheard "MRN A" as "MRNA" (allow spaces in code)
+      /\bMRNA\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
       // "MRN is AB123"
-      /\bMRN\s+IS\s+([A-Z0-9]{3,12})\b/i,
+      /\bMRN\s+IS\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
       // "MRN-0001 ABC" - capture code with space after hyphen (spoken as "MRN hyphen 0001 ABC")
       /\bMRN-([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
-      // "MRN AB123" (with space)
-      /\bMRN\s+([A-Z0-9]{3,12})\b/i,
+      // "MRN AB123" (with space) - allow spaces within the code
+      /\bMRN\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
       // "M R N AB123"
-      /\bM\s+R\s+N\s+([A-Z0-9]{3,12})\b/i,
+      /\bM\s+R\s+N\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)/i,
     ];
 
     // Try patterns on preprocessed text first
     for (const pattern of variations) {
       const match = preprocessed.match(pattern);
       if (match && match[1]) {
-        let code = match[1].trim().toUpperCase().replace(/\s+/g, '');
-        if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
+        // Split by spaces and filter out stop words
+        const words = match[1].trim().split(/\s+/);
+        const validWords = [];
+        for (const w of words) {
+          if (!w) continue;
+          if (stopWords.test(w)) break; // Stop at first stop word
+          validWords.push(w);
+        }
+        let code = validWords.join('').toUpperCase();
+        if (/^[A-Z0-9]{3,}$/.test(code) && !excludeWords.test(code)) {
           return `MRN-${code}`;
         }
       }
@@ -1409,8 +1418,16 @@
     for (const pattern of variations) {
       const match = text.match(pattern);
       if (match && match[1]) {
-        let code = match[1].trim().toUpperCase().replace(/\s+/g, '');
-        if (/^[A-Z0-9]{3,12}$/.test(code) && !excludeWords.test(code)) {
+        // Split by spaces and filter out stop words
+        const words = match[1].trim().split(/\s+/);
+        const validWords = [];
+        for (const w of words) {
+          if (!w) continue;
+          if (stopWords.test(w)) break; // Stop at first stop word
+          validWords.push(w);
+        }
+        let code = validWords.join('').toUpperCase();
+        if (/^[A-Z0-9]{3,}$/.test(code) && !excludeWords.test(code)) {
           return `MRN-${code}`;
         }
       }
