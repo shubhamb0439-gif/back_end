@@ -4734,6 +4734,7 @@
     try {
       if (!dom.ehrSidebar || !dom.ehrOverlay || !dom.mrnInput) {
         console.log('[MRN Automation] Missing DOM elements');
+        state.mrnAutomationInProgress = false;
         return;
       }
 
@@ -4772,9 +4773,7 @@
       if (summaryTab && !summaryTab.classList.contains('active')) {
         console.log('[MRN Automation] Clicking Summary tab');
         summaryTab.click();
-        // Wait for summary tab to be activated, then auto-play
         await new Promise(resolve => setTimeout(resolve, 300));
-        // Trigger auto-play by calling loadSummary with autoPlay=true
         console.log('[MRN Automation] Triggering loadSummary with autoPlay=true');
         await loadSummary(true);
       } else if (summaryTab && summaryTab.classList.contains('active')) {
@@ -4782,10 +4781,11 @@
         await loadSummary(true);
       }
 
+      console.log('[MRN Automation] Workflow complete');
+      state.mrnAutomationInProgress = false;
+
     } catch (err) {
       console.warn('[MRN Automation] Failed:', err);
-    } finally {
-      console.log('[MRN Automation] Workflow complete');
       state.mrnAutomationInProgress = false;
     }
   }
