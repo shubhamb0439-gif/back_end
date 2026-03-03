@@ -20,54 +20,67 @@
 </head>
 
 <body>
-    <div class="voice-container">
-        <header class="voice-header">
-            <img src="/public/images/xr-logo.png" alt="XR Vision" class="voice-logo" />
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>XR Vision</h1>
+            <div id="status" class="status status-disconnected">Status: Disconnected</div>
         </header>
 
-        <div class="central-orb-container">
-            <div class="orb-wrapper">
-                <div class="orb-glow"></div>
-                <div class="orb-ring"></div>
-                <div class="orb-content">
-                    <canvas id="waveformCanvas" width="300" height="150"></canvas>
-                    <div id="orbText" class="orb-text"></div>
-                </div>
+        <!-- Last heard voice chip -->
+        <div id="chipLastCmd" class="chip" hidden>Heard: …</div>
+
+        <!-- Controls -->
+        <section class="card controls">
+
+            <!-- XR Device ID input (similar to Dock "Enter the ID") -->
+            <div class="controls-row">
+                <input id="deviceXrIdInput" class="input" placeholder="Enter Device XR ID (e.g. 1234)" />
             </div>
-        </div>
-
-        <div id="responseCard" class="response-card" hidden>
-            <button id="btnPlayResponse" class="play-btn">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z"/>
-                </svg>
-            </button>
-            <div class="response-text">
-                <span id="responseText">Your XR assistant response appears here...</span>
+            <div class="controls-row">
+                <button id="btnConnect" class="chip-btn">Connect</button>
+                <button id="btnStream" class="chip-btn">Start Stream</button>
+                <button id="btnMute" class="chip-btn">Mute</button>
+                <button id="btnVideo" class="chip-btn">Hide Video</button>
+                <button id="btnVoice" class="chip-btn">Start Voice</button>
+                <button id="btnAudio" class="chip-btn" disabled style="opacity: 0.5; cursor: not-allowed;">Audio</button>
             </div>
-        </div>
+            <div class="controls-row">
+                <button id="btnStartRec" class="btn-outline">Start Recording</button>
+                <button id="btnStopRec" class="btn-outline">Stop Recording</button>
+            </div>
+        </section>
 
-        <div class="ptt-container">
-            <button id="btnPTT" class="ptt-button">
-                <svg class="mic-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                </svg>
-            </button>
-            <div class="ptt-label">Hold to Speak</div>
-        </div>
+        <!-- Preview -->
+        <section class="card preview">
+            <video id="preview" autoplay playsinline webkit-playsinline muted></video>
 
-        <input id="deviceXrIdInput" type="hidden" />
-        <div id="status" class="status-indicator"></div>
-        <video id="preview" autoplay playsinline webkit-playsinline muted hidden></video>
+            <div id="noStream" class="preview-empty" hidden>Stream not ready</div>
+        </section>
+
+        <!-- Messages -->
+        <section class="messages card">
+            <h2>Messages</h2>
+            <div id="msgList" class="msg-list"></div>
+        </section>
+
+        <!-- Composer -->
+        <section class="composer">
+            <input id="msgInput" class="input" placeholder="Type a message…" />
+            <label class="urgent">
+                <input id="chkUrgent" type="checkbox" />
+                <span>Urgent</span>
+            </label>
+            <button id="btnSend" class="btn-send">Send</button>
+        </section>
     </div>
 
     <!-- Socket.IO client -->
     <script src="/socket.io/socket.io.js"></script>
     <!-- XR config (must load before app modules) -->
     <script src="/public/js/config.js"></script>
-    <!-- Voice-First Device Logic -->
-    <script type="module" src="/public/js/voice-device.js"></script>
+    <!-- App logic -->
+    <script type="module" src="/public/js/ui.js"></script>
 
 
     <!-- Service worker registration -->
