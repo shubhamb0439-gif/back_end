@@ -1,0 +1,239 @@
+/* device-orb.css - Orb-based voice UI for XR Vision Device */
+
+/* ==================== ORB UI MODE ==================== */
+.orb-mode {
+  min-height: 100vh;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hide original controls when in orb mode */
+.orb-mode .controls,
+.orb-mode .preview,
+.orb-mode .messages,
+.orb-mode .composer {
+  display: none !important;
+}
+
+/* ==================== HEADER (MINIMAL) ==================== */
+.orb-mode .header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.orb-mode .header h1 {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.orb-mode .header .status {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+/* ==================== ORB CONTAINER ==================== */
+.orb-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 400px;
+  width: 100%;
+}
+
+/* Orb visual */
+.orb-visual {
+  width: 280px;
+  height: 280px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orb-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 40px rgba(139, 92, 246, 0.6));
+  transition: filter 0.3s ease, transform 0.3s ease;
+}
+
+/* Active state - when listening */
+.orb-visual.active img {
+  filter: drop-shadow(0 0 60px rgba(139, 92, 246, 0.9));
+  transform: scale(1.05);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 60px rgba(139, 92, 246, 0.9));
+    transform: scale(1.05);
+  }
+  50% {
+    filter: drop-shadow(0 0 80px rgba(139, 92, 246, 1));
+    transform: scale(1.08);
+  }
+}
+
+/* ==================== RESPONSE CARD ==================== */
+.response-card {
+  width: 100%;
+  max-width: 360px;
+  min-height: 80px;
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 16px 20px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.3s ease;
+}
+
+.response-card.active {
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.response-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.response-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: #8b5cf6;
+}
+
+.response-text {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.response-text.placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+/* ==================== MIC BUTTON CONTROLS ==================== */
+.mic-controls {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+}
+
+.mic-button {
+  width: 80px;
+  height: 80px;
+  position: relative;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: transform 0.2s ease;
+}
+
+.mic-button:active {
+  transform: scale(0.95);
+}
+
+.mic-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.5));
+}
+
+.mic-button.active img {
+  filter: drop-shadow(0 0 30px rgba(139, 92, 246, 0.8));
+  animation: micPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 30px rgba(139, 92, 246, 0.8));
+  }
+  50% {
+    filter: drop-shadow(0 0 40px rgba(139, 92, 246, 1));
+  }
+}
+
+.mic-instruction {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.mic-instruction.active {
+  color: #8b5cf6;
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 480px) {
+  .orb-visual {
+    width: 240px;
+    height: 240px;
+  }
+
+  .mic-button {
+    width: 70px;
+    height: 70px;
+  }
+
+  .response-card {
+    min-height: 70px;
+    padding: 14px 18px;
+  }
+}
+
+@media (min-width: 768px) {
+  .orb-visual {
+    width: 320px;
+    height: 320px;
+  }
+
+  .mic-button {
+    width: 90px;
+    height: 90px;
+  }
+}
+
+/* ==================== HIDDEN ORIGINAL UI ==================== */
+/* Keep original elements in DOM but hidden for functionality */
+#chipLastCmd {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}

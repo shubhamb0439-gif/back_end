@@ -17,20 +17,48 @@
     <!-- Styles -->
     <link rel="stylesheet" href="/public/css/common.css" />
     <link rel="stylesheet" href="/public/css/device.css" />
+    <link rel="stylesheet" href="/public/css/device-orb.css" />
 </head>
 
 <body>
-    <div class="container">
+    <div class="container orb-mode">
         <!-- Header -->
         <header class="header">
             <h1>XR Vision</h1>
             <div id="status" class="status status-disconnected">Status: Disconnected</div>
         </header>
 
-        <!-- Last heard voice chip -->
+        <!-- ORB UI -->
+        <div class="orb-container">
+            <!-- Orb Visual -->
+            <div class="orb-visual" id="orbVisual">
+                <img src="/public/images/orb-visual.png" alt="XR Assistant Orb">
+            </div>
+
+            <!-- Response Card -->
+            <div class="response-card" id="responseCard">
+                <div class="response-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                </div>
+                <div class="response-text placeholder" id="responseText">Your XR assistant response appears here...</div>
+            </div>
+        </div>
+
+        <!-- Mic Controls -->
+        <div class="mic-controls">
+            <button class="mic-button" id="micButton" aria-label="Voice Control">
+                <img src="/public/images/mic-button.png" alt="Microphone">
+            </button>
+            <div class="mic-instruction" id="micInstruction">Hold to Speak</div>
+        </div>
+
+        <!-- Last heard voice chip (hidden but functional) -->
         <div id="chipLastCmd" class="chip" hidden>Heard: …</div>
 
-        <!-- Controls -->
+        <!-- Controls (hidden but functional) -->
         <section class="card controls">
 
             <!-- XR Device ID input (similar to Dock "Enter the ID") -->

@@ -11,6 +11,7 @@ import { SignalingClient } from './signaling.js';
 import WebRtcStreamer from './device.js';
 import TelemetryReporter from './telemetry.js';
 import { Message, appendMessage } from './messages.js';
+import { OrbUIController } from './device-orb-ui.js';
 
 // Normalize XR IDs so that "1234" becomes "XR-1234", etc.
 function normalizeXrId(raw) {
@@ -1379,6 +1380,7 @@ function setupSR() {
         if (interim && recordingActive) {
             elChip.textContent = `Listening: ${interim}`;
             elChip.hidden = false;
+            if (orbUI) orbUI.updateResponse(interim, false);
         }
 
         if (finalTxt) {
@@ -1386,6 +1388,7 @@ function setupSR() {
             lastRecognizedCommand = finalLower;
             elChip.textContent = `Heard: ${finalTxt}`;
             elChip.hidden = false;
+            if (orbUI) orbUI.updateResponse(finalTxt, false);
 
             if (/\bcreate\b/.test(finalLower)) {
                 onStopRecordingNote();
@@ -1413,6 +1416,7 @@ function startVoiceRecognition() {
     isListening = true;
     try { rec.start(); msg('System', 'Voice recognition started'); } catch { msg('System', 'Failed to start voice'); }
     setStatus(isServerConnected);
+    if (orbUI) orbUI.syncVoiceState(true);
 }
 
 function stopVoiceRecognition() {
@@ -1421,6 +1425,7 @@ function stopVoiceRecognition() {
     try { rec.stop(); msg('System', 'Voice recognition stopped'); } catch { msg('System', 'Failed to stop voice recognition'); }
     if (recordingActive) finalizeRecordingNote();
     setStatus(isServerConnected);
+    if (orbUI) orbUI.syncVoiceState(false);
 }
 
 function processVoiceCommand(cmd) {
@@ -1460,6 +1465,21 @@ elBtnVoice.addEventListener('click', () => {
     }
     if (isListening) stopVoiceRecognition(); else startVoiceRecognition();
 });
+
+// Initialize Orb UI Controller
+let orbUI = null;
+if (elBtnVoice) {
+    orbUI = new OrbUIController({
+        voiceButton: elBtnVoice,
+        onVoiceToggle: (shouldStart) => {
+            if (shouldStart && !isListening) {
+                startVoiceRecognition();
+            } else if (!shouldStart && isListening) {
+                stopVoiceRecognition();
+            }
+        }
+    });
+}
 
 // Recording buttons
 function onStartRecordingNote() {
