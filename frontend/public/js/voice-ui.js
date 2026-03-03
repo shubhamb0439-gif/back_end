@@ -1,48 +1,26 @@
-// voice-ui.js - Voice-centric UI enhancements for device.html
-// Adds waveform visualization and touch interactions to the new voice interface
+// voice-ui.js - Simple push-to-talk interface
+// No waveform, just button handling
 
 class VoiceUI {
   constructor() {
-    this.canvas = document.getElementById('waveformCanvas');
-    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
     this.micButton = document.getElementById('micButton');
     this.responseText = document.getElementById('responseText');
     this.voiceChip = document.getElementById('chipLastCmd');
     this.statusElement = document.getElementById('status');
     this.voiceInterface = document.querySelector('.voice-interface');
+    this.voiceOrb = document.querySelector('.voice-orb');
 
     this.isListening = false;
-    this.audioContext = null;
-    this.analyser = null;
-    this.microphone = null;
-    this.animationId = null;
-    this.dataArray = null;
 
-    this.setupCanvas();
     this.setupMicButton();
-    this.setupWaveform();
-  }
-
-  setupCanvas() {
-    if (!this.canvas) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
-
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-
-    this.ctx.scale(dpr, dpr);
-
-    this.drawIdleWaveform();
-
-    window.addEventListener('resize', () => {
-      this.setupCanvas();
-    });
+    console.log('[VOICE-UI] Initialized');
   }
 
   setupMicButton() {
-    if (!this.micButton) return;
+    if (!this.micButton) {
+      console.warn('[VOICE-UI] Mic button not found');
+      return;
+    }
 
     let isPressed = false;
 
@@ -53,7 +31,9 @@ class VoiceUI {
       if (isPressed) return;
       isPressed = true;
 
+      console.log('[VOICE-UI] Button pressed');
       this.micButton.classList.add('active');
+      this.voiceOrb?.classList.add('listening');
       this.startListening();
     };
 
@@ -64,7 +44,9 @@ class VoiceUI {
       if (!isPressed) return;
       isPressed = false;
 
+      console.log('[VOICE-UI] Button released');
       this.micButton.classList.remove('active');
+      this.voiceOrb?.classList.remove('listening');
       this.stopListening();
     };
 
@@ -85,201 +67,63 @@ class VoiceUI {
       e.preventDefault();
       e.stopPropagation();
     });
+
+    console.log('[VOICE-UI] Button handlers attached');
   }
 
-  async setupWaveform() {
-    if (!this.canvas) return;
-
-    try {
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 256;
-      this.analyser.smoothingTimeConstant = 0.8;
-
-      const bufferLength = this.analyser.frequencyBinCount;
-      this.dataArray = new Uint8Array(bufferLength);
-    } catch (err) {
-      console.warn('[VOICE-UI] Audio context setup failed:', err);
-    }
-  }
-
-  async startListening() {
-    if (this.isListening) return;
-
-    console.log('[VOICE-UI] Start');
-
-    // Start voice recognition immediately
-    if (typeof window !== 'undefined' && window.startVoiceRecognition) {
-      const started = window.startVoiceRecognition();
-      if (!started) {
-        console.log('[VOICE-UI] Failed to start recognition');
-        return;
-      }
+  startListening() {
+    if (this.isListening) {
+      console.log('[VOICE-UI] Already listening');
+      return;
     }
 
-    this.isListening = true;
-    this.voiceInterface?.classList.add('listening');
+    console.log('[VOICE-UI] Starting...');
 
-    if (this.responseText) {
-      this.responseText.textContent = 'Listening...';
-    }
+    // Wait for ui.js to load and export the function
+    const tryStart = () => {
+      if (typeof window !== 'undefined' && typeof window.startVoiceRecognition === 'function') {
+        console.log('[VOICE-UI] Calling startVoiceRecognition()');
+        const started = window.startVoiceRecognition();
 
-    // Start waveform (async, non-blocking)
-    this.startWaveform();
-    this.animate();
-  }
+        if (started) {
+          this.isListening = true;
+          this.voiceInterface?.classList.add('listening');
 
-  async startWaveform() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      if (this.audioContext && this.analyser) {
-        if (this.audioContext.state === 'suspended') {
-          await this.audioContext.resume();
+          if (this.responseText) {
+            this.responseText.textContent = 'Listening...';
+          }
+          console.log('[VOICE-UI] ✓ Started');
+        } else {
+          console.log('[VOICE-UI] ✗ Failed to start');
+          if (this.responseText) {
+            this.responseText.textContent = 'Failed to start voice recognition';
+          }
         }
-
-        this.microphone = this.audioContext.createMediaStreamSource(stream);
-        this.microphone.connect(this.analyser);
+      } else {
+        console.log('[VOICE-UI] startVoiceRecognition not available yet, retrying...');
+        setTimeout(tryStart, 50);
       }
-    } catch (err) {
-      console.log('[VOICE-UI] Waveform skipped');
-    }
+    };
+
+    tryStart();
   }
 
   stopListening() {
-    if (!this.isListening) return;
+    if (!this.isListening) {
+      console.log('[VOICE-UI] Not listening');
+      return;
+    }
 
-    console.log('[VOICE-UI] Stop');
+    console.log('[VOICE-UI] Stopping...');
 
-    // Stop voice recognition immediately
-    if (typeof window !== 'undefined' && window.stopVoiceRecognition) {
+    if (typeof window !== 'undefined' && typeof window.stopVoiceRecognition === 'function') {
+      console.log('[VOICE-UI] Calling stopVoiceRecognition()');
       window.stopVoiceRecognition();
     }
 
     this.isListening = false;
     this.voiceInterface?.classList.remove('listening');
-
-    if (this.animationId) {
-      cancelAnimationFrame(this.animationId);
-      this.animationId = null;
-    }
-
-    this.drawIdleWaveform();
-
-    // Clean up microphone
-    if (this.microphone) {
-      try {
-        this.microphone.disconnect();
-        const stream = this.microphone.mediaStream;
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-        }
-        this.microphone = null;
-      } catch { }
-    }
-  }
-
-  animate() {
-    if (!this.isListening || !this.ctx || !this.analyser) return;
-
-    this.animationId = requestAnimationFrame(() => this.animate());
-
-    this.analyser.getByteFrequencyData(this.dataArray);
-
-    this.drawWaveform(this.dataArray);
-  }
-
-  drawWaveform(frequencyData) {
-    if (!this.ctx || !this.canvas) return;
-
-    const width = this.canvas.getBoundingClientRect().width;
-    const height = this.canvas.getBoundingClientRect().height;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const radius = Math.min(width, height) * 0.35;
-
-    this.ctx.clearRect(0, 0, width, height);
-
-    const sliceWidth = (Math.PI * 2) / frequencyData.length;
-    let angle = 0;
-
-    const gradient = this.ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, '#00d4ff');
-    gradient.addColorStop(0.5, '#0080ff');
-    gradient.addColorStop(1, '#00d4ff');
-
-    this.ctx.strokeStyle = gradient;
-    this.ctx.lineWidth = 2;
-    this.ctx.lineCap = 'round';
-    this.ctx.shadowBlur = 15;
-    this.ctx.shadowColor = 'rgba(0, 212, 255, 0.5)';
-
-    this.ctx.beginPath();
-
-    for (let i = 0; i < frequencyData.length; i++) {
-      const v = frequencyData[i] / 255.0;
-      const amplitude = v * 30 + 5;
-
-      const x = centerX + Math.cos(angle) * (radius + amplitude);
-      const y = centerY + Math.sin(angle) * (radius + amplitude);
-
-      if (i === 0) {
-        this.ctx.moveTo(x, y);
-      } else {
-        this.ctx.lineTo(x, y);
-      }
-
-      angle += sliceWidth;
-    }
-
-    this.ctx.closePath();
-    this.ctx.stroke();
-
-    this.ctx.shadowBlur = 0;
-  }
-
-  drawIdleWaveform() {
-    if (!this.ctx || !this.canvas) return;
-
-    const width = this.canvas.getBoundingClientRect().width;
-    const height = this.canvas.getBoundingClientRect().height;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const radius = Math.min(width, height) * 0.35;
-
-    this.ctx.clearRect(0, 0, width, height);
-
-    const gradient = this.ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, 'rgba(0, 212, 255, 0.3)');
-    gradient.addColorStop(0.5, 'rgba(0, 128, 255, 0.3)');
-    gradient.addColorStop(1, 'rgba(0, 212, 255, 0.3)');
-
-    this.ctx.strokeStyle = gradient;
-    this.ctx.lineWidth = 2;
-    this.ctx.shadowBlur = 10;
-    this.ctx.shadowColor = 'rgba(0, 212, 255, 0.3)';
-
-    this.ctx.beginPath();
-
-    const points = 60;
-    const sliceWidth = (Math.PI * 2) / points;
-
-    for (let i = 0; i <= points; i++) {
-      const angle = i * sliceWidth;
-      const amplitude = Math.sin(i * 0.3) * 8 + 3;
-
-      const x = centerX + Math.cos(angle) * (radius + amplitude);
-      const y = centerY + Math.sin(angle) * (radius + amplitude);
-
-      if (i === 0) {
-        this.ctx.moveTo(x, y);
-      } else {
-        this.ctx.lineTo(x, y);
-      }
-    }
-
-    this.ctx.stroke();
-    this.ctx.shadowBlur = 0;
+    console.log('[VOICE-UI] ✓ Stopped');
   }
 
   showResponse(text) {
@@ -317,24 +161,14 @@ class VoiceUI {
       statusText.textContent = 'Disconnected';
     }
   }
-
-  destroy() {
-    this.stopListening();
-
-    if (this.audioContext) {
-      try {
-        this.audioContext.close();
-      } catch (err) {
-        console.warn('[VOICE-UI] Error closing audio context:', err);
-      }
-    }
-  }
 }
 
+// Initialize when DOM is ready
 if (typeof window !== 'undefined') {
   window.VoiceUI = VoiceUI;
 
   window.addEventListener('DOMContentLoaded', () => {
+    console.log('[VOICE-UI] DOM ready, creating VoiceUI instance');
     window.voiceUI = new VoiceUI();
   });
 }
