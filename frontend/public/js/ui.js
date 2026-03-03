@@ -1364,6 +1364,7 @@ let conversationBuffer = '';
 function setupSR() {
     SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
     if (!SR) return false;
+    if (rec) return true;
     rec = new SR();
     rec.lang = speechIntentLang;
     rec.continuous = true;
@@ -1378,7 +1379,17 @@ function setupSR() {
             else interim += (interim ? ' ' : '') + t;
         }
 
+        if (_wakeSessionActive && (interim || finalTxt)) {
+            resetWakeSessionTimer();
+        }
+
         if (interim && recordingActive) {
+            elChip.textContent = `Listening: ${interim}`;
+            elChip.hidden = false;
+            if (orbUI) orbUI.updateResponse(interim, false);
+        }
+
+        if (interim && _wakeSessionActive && !recordingActive) {
             elChip.textContent = `Listening: ${interim}`;
             elChip.hidden = false;
             if (orbUI) orbUI.updateResponse(interim, false);
@@ -1402,11 +1413,31 @@ function setupSR() {
             }
         }
     };
-    rec.onerror = () => {
-        if (isListening) try { rec.start(); } catch { }
+    rec.onerror = (ev) => {
+        const code = ev?.error || 'unknown';
+        console.log('[VoiceRec] Error:', code);
+        if (code === 'aborted' || code === 'no-speech' || code === 'audio-capture' || code === 'network') {
+            if (isListening) {
+                setTimeout(() => {
+                    if (isListening) try { rec.start(); } catch { }
+                }, 300);
+            }
+        }
     };
     rec.onend = () => {
-        if (isListening) try { rec.start(); } catch { }
+        console.log('[VoiceRec] onend fired, isListening:', isListening);
+        if (isListening) {
+            setTimeout(() => {
+                if (isListening) {
+                    try { rec.start(); } catch (e) {
+                        console.warn('[VoiceRec] Restart failed:', e);
+                        setTimeout(() => {
+                            if (isListening) try { rec.start(); } catch { }
+                        }, 500);
+                    }
+                }
+            }, 100);
+        }
     };
     return true;
 }
@@ -1423,7 +1454,14 @@ function startVoiceRecognition() {
 function stopVoiceRecognition() {
     if (!isListening) return;
     isListening = false;
-    try { rec.stop(); msg('System', 'Voice recognition stopped'); } catch { msg('System', 'Failed to stop voice recognition'); }
+    try {
+        if (rec) rec.stop();
+        rec = null;
+        msg('System', 'Voice recognition stopped');
+    } catch {
+        rec = null;
+        msg('System', 'Failed to stop voice recognition');
+    }
     if (recordingActive) finalizeRecordingNote();
     setStatus(isServerConnected);
     if (orbUI) orbUI.syncVoiceState(false);
@@ -1520,8 +1558,50 @@ if (elBtnVoice) {
 
 // ===================== Wake Listener ("Hey RHEA") =====================
 let wakeListener = null;
-const WAKE_LISTEN_DURATION_MS = 10000;
+const WAKE_LISTEN_DURATION_MS = 15000;
 let _wakeSessionTimer = null;
+let _wakeSessionActive = false;
+
+function speakPrompt(text) {
+    try {
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        window.speechSynthesis.speak(utterance);
+    } catch (e) {
+        console.warn('[TTS] Failed to speak:', e);
+    }
+}
+
+function endWakeSession() {
+    if (!_wakeSessionActive) return;
+    _wakeSessionActive = false;
+    if (_wakeSessionTimer) {
+        clearTimeout(_wakeSessionTimer);
+        _wakeSessionTimer = null;
+    }
+    if (isListening) {
+        stopVoiceRecognition();
+    }
+    setTimeout(() => {
+        if (wakeListener && !_wakeSessionActive) {
+            wakeListener.resume();
+        }
+    }, 500);
+}
+
+function resetWakeSessionTimer() {
+    if (!_wakeSessionActive) return;
+    if (_wakeSessionTimer) clearTimeout(_wakeSessionTimer);
+    _wakeSessionTimer = setTimeout(() => {
+        console.log('[WakeListener] Session timeout - no speech detected');
+        endWakeSession();
+    }, WAKE_LISTEN_DURATION_MS);
+}
 
 function initWakeListener() {
     if (!WakeListener.isAvailable()) {
@@ -1535,20 +1615,19 @@ function initWakeListener() {
             console.log('[WakeListener] Activated by:', transcript);
             if (orbUI) orbUI.updateResponse('Hey RHEA detected - listening...', false);
 
+            _wakeSessionActive = true;
             wakeListener.pause();
 
-            if (!isListening) {
-                startVoiceRecognition();
-            }
+            speakPrompt('How can I help you?');
 
-            if (_wakeSessionTimer) clearTimeout(_wakeSessionTimer);
-            _wakeSessionTimer = setTimeout(() => {
-                if (isListening && !orbUI?.isListening) {
-                    stopVoiceRecognition();
+            const startDelay = 1200;
+            setTimeout(() => {
+                if (!_wakeSessionActive) return;
+                if (!isListening) {
+                    startVoiceRecognition();
                 }
-                wakeListener?.resume();
-                _wakeSessionTimer = null;
-            }, WAKE_LISTEN_DURATION_MS);
+                resetWakeSessionTimer();
+            }, startDelay);
         },
         onError: (err) => {
             console.warn('[WakeListener] Error:', err);
@@ -1558,19 +1637,31 @@ function initWakeListener() {
     const micBtn = document.getElementById('micButton');
     if (micBtn) {
         micBtn.addEventListener('touchstart', () => {
+            if (_wakeSessionActive) endWakeSession();
             if (wakeListener?.isRunning()) wakeListener.pause();
-            if (_wakeSessionTimer) { clearTimeout(_wakeSessionTimer); _wakeSessionTimer = null; }
         }, { passive: true });
 
         micBtn.addEventListener('touchend', () => {
-            setTimeout(() => { if (wakeListener?.isRunning()) wakeListener.resume(); }, 500);
+            setTimeout(() => {
+                if (wakeListener?.isRunning() && !_wakeSessionActive && !isListening) {
+                    wakeListener.resume();
+                }
+            }, 500);
         }, { passive: true });
 
         micBtn.addEventListener('touchcancel', () => {
-            setTimeout(() => { if (wakeListener?.isRunning()) wakeListener.resume(); }, 500);
+            setTimeout(() => {
+                if (wakeListener?.isRunning() && !_wakeSessionActive && !isListening) {
+                    wakeListener.resume();
+                }
+            }, 500);
         }, { passive: true });
 
         micBtn.addEventListener('click', () => {
+            if (_wakeSessionActive) {
+                endWakeSession();
+                return;
+            }
             if (wakeListener?.isRunning()) {
                 if (isListening) {
                     wakeListener.pause();
