@@ -23,8 +23,6 @@ export class OrbUIController {
     this.pressTimer = null;
     this.isPressing = false;
 
-    this.autonomousMode = false;
-
     this._init();
   }
 
@@ -160,59 +158,6 @@ export class OrbUIController {
     if (this.isListening !== listening) {
       this.isListening = listening;
       this._updateUI(listening);
-    }
-  }
-
-  setAutonomousMode(state) {
-    this.autonomousMode = state;
-
-    if (this.orbVisual) {
-      this.orbVisual.classList.toggle('autonomous', state === 'active');
-      this.orbVisual.classList.toggle('wake-listening', state === 'wake-word-listening');
-      this.orbVisual.classList.toggle('activating', state === 'activating');
-    }
-
-    if (this.micInstruction) {
-      if (state === 'active') {
-        this.micInstruction.textContent = 'RHEA is listening...';
-        this.micInstruction.classList.add('autonomous-active');
-      } else if (state === 'wake-word-listening') {
-        this.micInstruction.textContent = 'Say "Hey RHEA" or press button';
-        this.micInstruction.classList.remove('autonomous-active');
-      } else if (state === 'activating') {
-        this.micInstruction.textContent = 'Activating RHEA...';
-        this.micInstruction.classList.add('autonomous-active');
-      } else {
-        this.micInstruction.classList.remove('autonomous-active');
-        if (this.isMobile) {
-          this.micInstruction.textContent = 'Hold to Speak';
-        } else {
-          this.micInstruction.textContent = 'Click to Speak';
-        }
-      }
-    }
-
-    if (this.micButton) {
-      if (state === 'active') {
-        this.micButton.classList.add('autonomous-active');
-      } else {
-        this.micButton.classList.remove('autonomous-active');
-      }
-    }
-
-    console.log('[OrbUI] Autonomous mode state:', state);
-  }
-
-  showExitHint() {
-    if (this.responseText) {
-      this.responseText.textContent = 'Say "Goodbye" or press button to exit';
-      this.responseText.classList.add('exit-hint');
-    }
-  }
-
-  hideExitHint() {
-    if (this.responseText) {
-      this.responseText.classList.remove('exit-hint');
     }
   }
 
