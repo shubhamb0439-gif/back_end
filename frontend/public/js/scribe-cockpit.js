@@ -168,6 +168,10 @@
     lastProcessedMrn: null,
     mrnAutomationInProgress: false,
     mrnAutomationTimer: null,
+
+    // Audio playback state
+    audioPlaying: false,
+    currentPlayingMrn: null,
   };
 
   // =====================================================================================
@@ -3577,6 +3581,17 @@
 
       state.socket.on('audio_playback_complete', (data) => {
         console.log('[SCRIBE] 🎵 Audio playback complete notification received:', data);
+
+        // Reset audio playing state
+        console.log('[SCRIBE] Previous audio state:', {
+          audioPlaying: state.audioPlaying,
+          currentPlayingMrn: state.currentPlayingMrn
+        });
+
+        state.audioPlaying = false;
+        state.currentPlayingMrn = null;
+        console.log('[SCRIBE] ✅ Audio state reset - audioPlaying = false');
+
         const speakerBtn = document.getElementById('speakerBtn');
         if (speakerBtn) {
           speakerBtn.disabled = false;
@@ -3596,7 +3611,7 @@
 
         // Reset MRN automation state to allow re-automation on new transcript
         console.log('[SCRIBE] ♻️ Resetting MRN automation state after audio complete');
-        console.log('[SCRIBE] Previous state:', {
+        console.log('[SCRIBE] Previous MRN state:', {
           lastProcessedMrn: state.lastProcessedMrn,
           mrnAutomationInProgress: state.mrnAutomationInProgress
         });
@@ -4478,6 +4493,20 @@
     console.log('[playSummaryAudio] Received input type:', typeof text);
     console.log('[playSummaryAudio] Received input:', text);
 
+    // Check if audio is currently playing
+    if (state.audioPlaying) {
+      console.warn('[playSummaryAudio] Audio already playing, blocking new playback');
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Audio Playing',
+          text: 'Please wait for current audio to finish.',
+          timer: 2000
+        });
+      }
+      return;
+    }
+
     let textToSend = text;
 
     if (typeof text === 'object' && text !== null) {
@@ -4543,6 +4572,15 @@
           room: state.currentRoom
         });
 
+        // Mark audio as playing and record the MRN
+        state.audioPlaying = true;
+        state.currentPlayingMrn = state.currentPatient?.mrn_no || null;
+        console.log('[TTS] ✅ Audio playback started, state.audioPlaying = true, MRN:', state.currentPlayingMrn);
+
+        // Now that audio is playing, mark this MRN as processed
+        state.lastProcessedMrn = state.currentPlayingMrn;
+        console.log('[TTS] 🏷️ Marked MRN as processed:', state.lastProcessedMrn);
+
         console.log('[TTS] ✅ Event emitted successfully');
 
         if (typeof Swal !== 'undefined') {
@@ -4592,15 +4630,17 @@
       renderSummaryDetail(cached.text, cached.template_title || 'Summary Note');
       if (autoPlay) {
         console.log('[Load Summary] Auto-play requested (cached)');
-        // Auto-play after a longer delay to ensure UI is fully rendered and button is ready
+        // Auto-play after delay to ensure UI is fully rendered and button is ready
         setTimeout(() => {
           const speakerBtn = document.getElementById('speakerBtn');
           console.log('[Load Summary] Speaker button found:', !!speakerBtn);
-          if (speakerBtn) {
+          if (speakerBtn && !state.audioPlaying) {
             console.log('[Load Summary] Clicking speaker button');
             speakerBtn.click();
+          } else if (state.audioPlaying) {
+            console.log('[Load Summary] ⏸️ Audio already playing, skipping auto-play');
           }
-        }, 2000);
+        }, 1000);
       }
       return;
     }
@@ -4631,15 +4671,17 @@
 
       if (autoPlay) {
         console.log('[Load Summary] Auto-play requested (fresh)');
-        // Auto-play after a longer delay to ensure UI is fully rendered and button is ready
+        // Auto-play after delay to ensure UI is fully rendered and button is ready
         setTimeout(() => {
           const speakerBtn = document.getElementById('speakerBtn');
           console.log('[Load Summary] Speaker button found:', !!speakerBtn);
-          if (speakerBtn) {
+          if (speakerBtn && !state.audioPlaying) {
             console.log('[Load Summary] Clicking speaker button');
             speakerBtn.click();
+          } else if (state.audioPlaying) {
+            console.log('[Load Summary] ⏸️ Audio already playing, skipping auto-play');
           }
-        }, 2000);
+        }, 1000);
       }
     } catch (e) {
       stopSummaryTimer();
@@ -4656,6 +4698,19 @@
 
   async function automateEHRWorkflow(mrn) {
     console.log('[MRN Automation] Starting workflow for MRN:', mrn);
+    console.log('[MRN Automation] Current state:', {
+      audioPlaying: state.audioPlaying,
+      currentPlayingMrn: state.currentPlayingMrn,
+      lastProcessedMrn: state.lastProcessedMrn,
+      mrnAutomationInProgress: state.mrnAutomationInProgress
+    });
+
+    // Block if audio is currently playing
+    if (state.audioPlaying) {
+      console.log('[MRN Automation] ⏸️ BLOCKED - Audio currently playing for MRN:', state.currentPlayingMrn);
+      console.log('[MRN Automation] Will auto-retry when audio completes');
+      return;
+    }
 
     if (!mrn || state.mrnAutomationInProgress) {
       console.log('[MRN Automation] Blocked - mrn:', mrn, 'inProgress:', state.mrnAutomationInProgress);
@@ -4673,7 +4728,8 @@
     }
 
     state.mrnAutomationInProgress = true;
-    state.lastProcessedMrn = mrn;
+    // DO NOT set lastProcessedMrn here - it will be set when audio starts playing
+    console.log('[MRN Automation] ▶️ Starting automation for NEW MRN:', mrn);
 
     try {
       if (!dom.ehrSidebar || !dom.ehrOverlay || !dom.mrnInput) {
