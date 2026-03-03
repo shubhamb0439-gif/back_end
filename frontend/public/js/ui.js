@@ -1453,6 +1453,42 @@ function processVoiceCommand(cmd) {
     if (/\bhide\b/.test(c)) { if (videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already hidden.'); return; }
     if (/\bshow\b/.test(c)) { if (!videoVisible) elBtnVideo.click(); else msg('Voice', 'Video already shown.'); return; }
 
+    // Audio playback controls
+    if (/\bplay\b/.test(c) || /\bresume\b/.test(c)) {
+        if (currentAudio && currentAudio.paused && !currentAudio.ended) {
+            toggleAudioPlayback();
+            msg('Voice', 'Resuming audio playback');
+            if (orbUI) orbUI.updateResponse('Resuming audio playback', false);
+        } else if (!currentAudio) {
+            msg('Voice', 'No audio available to play');
+            if (orbUI) orbUI.updateResponse('No audio available', false);
+        } else if (currentAudio.ended) {
+            msg('Voice', 'Audio has finished playing');
+            if (orbUI) orbUI.updateResponse('Audio has finished', false);
+        } else {
+            msg('Voice', 'Audio is already playing');
+            if (orbUI) orbUI.updateResponse('Audio already playing', false);
+        }
+        return;
+    }
+    if (/\bpause\b/.test(c)) {
+        if (currentAudio && !currentAudio.paused && !currentAudio.ended) {
+            toggleAudioPlayback();
+            msg('Voice', 'Pausing audio playback');
+            if (orbUI) orbUI.updateResponse('Pausing audio playback', false);
+        } else if (!currentAudio) {
+            msg('Voice', 'No audio available to pause');
+            if (orbUI) orbUI.updateResponse('No audio available', false);
+        } else if (currentAudio.ended) {
+            msg('Voice', 'Audio has finished playing');
+            if (orbUI) orbUI.updateResponse('Audio has finished', false);
+        } else {
+            msg('Voice', 'Audio is already paused');
+            if (orbUI) orbUI.updateResponse('Audio already paused', false);
+        }
+        return;
+    }
+
     msg('Voice', `Unrecognized command: ${cmd}`);
 }
 
