@@ -270,9 +270,12 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.1s ease;
   outline: none;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 .voice-mic-button:hover {
@@ -282,9 +285,10 @@ body {
 
 .voice-mic-button:active,
 .voice-mic-button.active {
-  transform: scale(0.95);
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 128, 255, 0.25));
+  transform: scale(1);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.4), rgba(0, 128, 255, 0.3));
   border-color: #00d4ff;
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
 }
 
 .mic-button-glow {

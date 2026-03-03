@@ -44,46 +44,46 @@ class VoiceUI {
   setupMicButton() {
     if (!this.micButton) return;
 
-    let pressTimer;
     let isPressed = false;
 
     const handlePressStart = (e) => {
       e.preventDefault();
-      isPressed = true;
-      this.micButton.classList.add('active');
+      e.stopPropagation();
 
-      clearTimeout(pressTimer);
-      pressTimer = setTimeout(() => {
-        if (isPressed) {
-          this.startListening();
-        }
-      }, 150);
+      if (isPressed) return;
+      isPressed = true;
+
+      this.micButton.classList.add('active');
+      this.startListening();
     };
 
     const handlePressEnd = (e) => {
       e.preventDefault();
+      e.stopPropagation();
+
+      if (!isPressed) return;
       isPressed = false;
+
       this.micButton.classList.remove('active');
-
-      clearTimeout(pressTimer);
-
-      if (this.isListening) {
-        setTimeout(() => {
-          this.stopListening();
-        }, 300);
-      }
+      this.stopListening();
     };
 
+    // Mouse events
     this.micButton.addEventListener('mousedown', handlePressStart);
     this.micButton.addEventListener('mouseup', handlePressEnd);
-    this.micButton.addEventListener('mouseleave', handlePressEnd);
+    this.micButton.addEventListener('mouseleave', (e) => {
+      if (isPressed) handlePressEnd(e);
+    });
 
+    // Touch events
     this.micButton.addEventListener('touchstart', handlePressStart, { passive: false });
     this.micButton.addEventListener('touchend', handlePressEnd, { passive: false });
     this.micButton.addEventListener('touchcancel', handlePressEnd, { passive: false });
 
+    // Prevent click event
     this.micButton.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
     });
   }
 
@@ -106,55 +106,54 @@ class VoiceUI {
   async startListening() {
     if (this.isListening) return;
 
+    console.log('[VOICE-UI] Start');
+
+    // Start voice recognition immediately
+    if (typeof window !== 'undefined' && window.startVoiceRecognition) {
+      const started = window.startVoiceRecognition();
+      if (!started) {
+        console.log('[VOICE-UI] Failed to start recognition');
+        return;
+      }
+    }
+
+    this.isListening = true;
+    this.voiceInterface?.classList.add('listening');
+
+    if (this.responseText) {
+      this.responseText.textContent = 'Listening...';
+    }
+
+    // Start waveform (async, non-blocking)
+    this.startWaveform();
+    this.animate();
+  }
+
+  async startWaveform() {
     try {
-      // Start the actual voice recognition system
-      const btnVoice = document.getElementById('btnVoice');
-      if (btnVoice && btnVoice.textContent === 'Start Voice') {
-        btnVoice.click();
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Start waveform visualization with a separate audio stream
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        if (this.audioContext && this.analyser) {
-          if (this.audioContext.state === 'suspended') {
-            await this.audioContext.resume();
-          }
-
-          this.microphone = this.audioContext.createMediaStreamSource(stream);
-          this.microphone.connect(this.analyser);
+      if (this.audioContext && this.analyser) {
+        if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
         }
-      } catch (audioErr) {
-        console.warn('[VOICE-UI] Waveform visualization unavailable:', audioErr);
-        // Continue anyway - voice recognition might still work
+
+        this.microphone = this.audioContext.createMediaStreamSource(stream);
+        this.microphone.connect(this.analyser);
       }
-
-      this.isListening = true;
-      this.voiceInterface?.classList.add('listening');
-      this.animate();
-
-      if (this.responseText) {
-        this.responseText.textContent = 'Listening...';
-      }
-
     } catch (err) {
-      console.error('[VOICE-UI] Failed to start listening:', err);
-      this.showResponse('Microphone access denied. Please enable microphone permissions.');
+      console.log('[VOICE-UI] Waveform skipped');
     }
   }
 
   stopListening() {
     if (!this.isListening) return;
 
-    if (this.microphone) {
-      try {
-        this.microphone.disconnect();
-        this.microphone.mediaStream.getTracks().forEach(track => track.stop());
-        this.microphone = null;
-      } catch (err) {
-        console.warn('[VOICE-UI] Error stopping microphone:', err);
-      }
+    console.log('[VOICE-UI] Stop');
+
+    // Stop voice recognition immediately
+    if (typeof window !== 'undefined' && window.stopVoiceRecognition) {
+      window.stopVoiceRecognition();
     }
 
     this.isListening = false;
@@ -167,11 +166,16 @@ class VoiceUI {
 
     this.drawIdleWaveform();
 
-    const btnVoice = document.getElementById('btnVoice');
-    if (btnVoice && btnVoice.textContent === 'Stop Voice') {
-      setTimeout(() => {
-        btnVoice.click();
-      }, 100);
+    // Clean up microphone
+    if (this.microphone) {
+      try {
+        this.microphone.disconnect();
+        const stream = this.microphone.mediaStream;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        this.microphone = null;
+      } catch { }
     }
   }
 
