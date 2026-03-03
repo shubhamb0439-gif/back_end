@@ -4998,8 +4998,15 @@
           dom.ehrSidebar.classList.remove('active');
           dom.ehrOverlay.classList.remove('active');
         } else {
-          // Before opening, check if there's a patient - if not, reset to search state
-          if (!state.currentPatient) {
+          // Before opening, ensure EHR state matches current transcript
+          const currentTranscriptId = state.currentActiveItemId;
+          if (currentTranscriptId) {
+            const ehrRestored = restoreEHRStateForTranscription(currentTranscriptId);
+            if (!ehrRestored) {
+              resetEHRToSearchState();
+            }
+          } else if (!state.currentPatient) {
+            // No active transcript and no patient - show search
             resetEHRToSearchState();
           }
           dom.ehrSidebar.classList.add('active');
