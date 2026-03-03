@@ -3313,10 +3313,13 @@
       const sequence = ++state.transcriptSequence;
       appendTranscriptItem({ from, to, text: text.trim(), timestamp, sequence });
 
+      console.log('[Transcript] New transcript:', text.trim());
+
       if (state.mrnAutomationTimer) {
         clearTimeout(state.mrnAutomationTimer);
       }
       state.mrnAutomationTimer = setTimeout(() => {
+        console.log('[Transcript] Triggering continuousMRNDetection after 500ms delay');
         continuousMRNDetection();
       }, 500);
 
@@ -4554,6 +4557,8 @@
   }
 
   async function loadSummary(autoPlay = false) {
+    console.log('[Load Summary] Called with autoPlay:', autoPlay);
+
     if (!dom.noteDetail) return;
     if (state.summaryGenerating) return; // prevent double-click spam
 
@@ -4565,12 +4570,16 @@
 
     const cached = state.summaryCacheByMrn.get(mrn);
     if (cached && cached.text) {
+      console.log('[Load Summary] Using cached summary');
       renderSummaryDetail(cached.text, cached.template_title || 'Summary Note');
       if (autoPlay) {
+        console.log('[Load Summary] Auto-play requested (cached)');
         // Auto-play after a short delay to ensure UI is rendered
         setTimeout(() => {
           const speakerBtn = document.getElementById('speakerBtn');
+          console.log('[Load Summary] Speaker button found:', !!speakerBtn);
           if (speakerBtn) {
+            console.log('[Load Summary] Clicking speaker button');
             speakerBtn.click();
           }
         }, 500);
@@ -4578,6 +4587,7 @@
       return;
     }
 
+    console.log('[Load Summary] Fetching summary from server');
     startSummaryTimer();
 
     try {
@@ -4598,19 +4608,24 @@
         fetchedAt: Date.now()
       });
 
+      console.log('[Load Summary] Summary fetched successfully');
       renderSummaryDetail(data?.text, data?.template_title || 'Summary Note');
 
       if (autoPlay) {
+        console.log('[Load Summary] Auto-play requested (fresh)');
         // Auto-play after a short delay to ensure UI is rendered
         setTimeout(() => {
           const speakerBtn = document.getElementById('speakerBtn');
+          console.log('[Load Summary] Speaker button found:', !!speakerBtn);
           if (speakerBtn) {
+            console.log('[Load Summary] Clicking speaker button');
             speakerBtn.click();
           }
         }, 500);
       }
     } catch (e) {
       stopSummaryTimer();
+      console.error('[Load Summary] Error:', e);
       dom.noteDetail.innerHTML =
         `<div class="text-red-500 text-sm">${escapeHtmlEhr(e?.message || 'Failed to generate summary')}</div>`;
     }
@@ -4622,7 +4637,12 @@
   // =====================================================================================
 
   async function automateEHRWorkflow(mrn) {
-    if (!mrn || state.mrnAutomationInProgress) return;
+    console.log('[MRN Automation] Starting workflow for MRN:', mrn);
+
+    if (!mrn || state.mrnAutomationInProgress) {
+      console.log('[MRN Automation] Blocked - mrn:', mrn, 'inProgress:', state.mrnAutomationInProgress);
+      return;
+    }
 
     if (state.mrnAutomationTimer) {
       clearTimeout(state.mrnAutomationTimer);
@@ -4630,6 +4650,7 @@
     }
 
     if (state.lastProcessedMrn === mrn) {
+      console.log('[MRN Automation] Already processed:', mrn);
       return;
     }
 
@@ -4638,17 +4659,22 @@
 
     try {
       if (!dom.ehrSidebar || !dom.ehrOverlay || !dom.mrnInput) {
+        console.log('[MRN Automation] Missing DOM elements');
         return;
       }
 
       const isOpen = dom.ehrSidebar.classList.contains('active');
+      console.log('[MRN Automation] EHR sidebar open:', isOpen);
+
       if (!isOpen) {
+        console.log('[MRN Automation] Opening EHR sidebar');
         dom.ehrSidebar.classList.add('active');
         dom.ehrOverlay.classList.add('active');
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
       if (dom.mrnInput) {
+        console.log('[MRN Automation] Setting MRN input to:', mrn);
         dom.mrnInput.value = mrn;
         dom.mrnInput.dispatchEvent(new Event('input', { bubbles: true }));
         dom.mrnInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -4657,25 +4683,35 @@
       await new Promise(resolve => setTimeout(resolve, 150));
 
       if (dom.mrnSearchButton) {
+        console.log('[MRN Automation] Clicking search button');
         dom.mrnSearchButton.click();
       }
 
+      console.log('[MRN Automation] Waiting for patient data to load...');
       await new Promise(resolve => setTimeout(resolve, CONFIG.MRN_AUTOMATION_DELAY_MS));
 
       const summaryTab = Array.from(document.querySelectorAll('.ehr-note-item'))
         .find(el => el.textContent.trim() === 'Summary');
 
+      console.log('[MRN Automation] Summary tab found:', !!summaryTab, 'Active:', summaryTab?.classList.contains('active'));
+
       if (summaryTab && !summaryTab.classList.contains('active')) {
+        console.log('[MRN Automation] Clicking Summary tab');
         summaryTab.click();
         // Wait for summary tab to be activated, then auto-play
         await new Promise(resolve => setTimeout(resolve, 300));
         // Trigger auto-play by calling loadSummary with autoPlay=true
+        console.log('[MRN Automation] Triggering loadSummary with autoPlay=true');
+        await loadSummary(true);
+      } else if (summaryTab && summaryTab.classList.contains('active')) {
+        console.log('[MRN Automation] Summary already active, triggering loadSummary with autoPlay=true');
         await loadSummary(true);
       }
 
     } catch (err) {
       console.warn('[MRN Automation] Failed:', err);
     } finally {
+      console.log('[MRN Automation] Workflow complete');
       state.mrnAutomationInProgress = false;
     }
   }
@@ -4693,9 +4729,13 @@
 
         const detectedMrn = detectMRNFromText(item.text);
         if (detectedMrn) {
+          console.log('[MRN Detection] Detected MRN:', detectedMrn, 'Last processed:', state.lastProcessedMrn);
           if (state.lastProcessedMrn !== detectedMrn) {
+            console.log('[MRN Detection] Triggering automation for:', detectedMrn);
             automateEHRWorkflow(detectedMrn);
             return;
+          } else {
+            console.log('[MRN Detection] Skipping - already processed:', detectedMrn);
           }
         }
       }
