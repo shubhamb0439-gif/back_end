@@ -1570,7 +1570,7 @@ const WAKE_LISTEN_DURATION_MS = 15000;
 let _wakeSessionTimer = null;
 let _wakeSessionActive = false;
 
-const GREETING_AUDIO_URL = '/public/audio/greeting-chime.wav';
+const GREETING_AUDIO_URL = '/public/audio/ElevenLabs_2026-03-03T18_39_37_Trinity_–_Calm_Female_Sleep_&_Affirmation_Voice_pvc_sp99_s50_sb71_se14_b_m2.mp3';
 let _greetingAudioCache = null;
 
 function playGreetingAudio() {
