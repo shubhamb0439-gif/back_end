@@ -213,13 +213,17 @@ export class VoiceController {
   /**
    * Format MRN numbers in transcript text
    * SIMPLIFIED LOGIC: "MRN-" is a constant template
-   * When user says "MRN" + any letters/numbers, format as MRN-XXXXXXX (no spaces)
+   * When user says "MRN" + any letters/numbers, format as MRN-XXXXXXX (no spaces, no length limit)
    *
    * Examples:
    *   "MRN ABA 121" -> "MRN-ABA121"
    *   "MRN A BA 123" -> "MRN-ABA123"
-   *   "MRNA BA 121" -> "MRN-ABA121"
+   *   "MRN aba121" -> "MRN-ABA121" (captures ALL characters)
+   *   "MRNA BA 121" -> "MRN-BA121"
    *   "m r n zero one two" -> "MRN-012"
+   *   "MRN VERYLONGCODE123" -> "MRN-VERYLONGCODE123" (no length limit)
+   *
+   * After the MRN code, normal transcription continues
    */
   _formatMRN(text) {
     if (!text) return text;
@@ -236,8 +240,9 @@ export class VoiceController {
 
     // SINGLE SIMPLE PATTERN: Catch "MRN" + any following alphanumeric content
     // Handles: "MRN", "mrn", "m r n", "MRNA" (misheard), etc.
+    // Takes ALL alphanumeric after MRN (no length limit)
     formatted = formatted.replace(
-      /\b(MRNA|m\s*r\s*n|mrn)\s+([\s\S]+?)(?=\.|,|;|$|\b(?:hi|doctor|patient|on|in|at|to|for|with|from|note|consultation)\b)/gi,
+      /\b(MRNA|m\s*r\s*n|mrn)\s+((?:[a-z0-9]+\s*)+)/gi,
       (match, prefix, codeRaw) => {
         // Extract all words/characters after "MRN"
         const words = codeRaw.trim().split(/\s+/);
@@ -262,8 +267,8 @@ export class VoiceController {
           .join('') // JOIN WITHOUT SPACES
           .replace(/[^A-Z0-9]/g, ''); // Remove any non-alphanumeric chars
 
-        // Only format if we have a valid MRN code (3-12 characters)
-        if (cleanCode.length >= 3 && cleanCode.length <= 12) {
+        // Format if we have at least 3 characters (NO MAX LIMIT)
+        if (cleanCode.length >= 3) {
           return `MRN-${cleanCode}`;
         }
         return match;

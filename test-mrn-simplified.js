@@ -14,7 +14,7 @@ function formatMRN(text) {
 
   // SINGLE PATTERN: Catch any variation of "MRN" followed by alphanumeric content
   formatted = formatted.replace(
-    /\b(MRNA|m\s*r\s*n|mrn)\s+([\s\S]+?)(?=\.|,|;|$|\b(?:hi|doctor|patient|on|in|at|to|for|with|from|note|consultation)\b)/gi,
+    /\b(MRNA|m\s*r\s*n|mrn)\s+((?:[a-z0-9]+\s*)+)/gi,
     (match, prefix, codeRaw) => {
       const words = codeRaw.trim().split(/\s+/);
       const validWords = [];
@@ -34,7 +34,7 @@ function formatMRN(text) {
         .join('')
         .replace(/[^A-Z0-9]/g, '');
 
-      if (cleanCode.length >= 3 && cleanCode.length <= 12) {
+      if (cleanCode.length >= 3) {
         return `MRN-${cleanCode}`;
       }
       return match;
@@ -56,6 +56,10 @@ const tests = [
   { input: "Disrespected note. MRNA BA121. Hi doctor.", expected: "MRN-BA121", desc: "Screenshot scenario" },
   { input: "patient mrn abc 456 on file", expected: "MRN-ABC456", desc: "In sentence" },
   { input: "MRN zero zero one a b c", expected: "MRN-001ABC", desc: "Number words" },
+  { input: "MRN aba121", expected: "MRN-ABA121", desc: "Your exact case: aba121 (should capture ALL)" },
+  { input: "MRN 07B", expected: "MRN-07B", desc: "Short MRN with number" },
+  { input: "MRN 07B XOR ABC", expected: "MRN-07BXORABC", desc: "Long MRN - no limit" },
+  { input: "MRN VERYLONGCODE123456789", expected: "MRN-VERYLONGCODE123456789", desc: "Very long MRN (no 12 char limit)" },
 ];
 
 console.log("=== SIMPLIFIED MRN LOGIC TEST ===\n");
