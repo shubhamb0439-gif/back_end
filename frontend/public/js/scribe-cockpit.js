@@ -4770,14 +4770,11 @@
 
       console.log('[MRN Automation] Summary tab found:', !!summaryTab, 'Active:', summaryTab?.classList.contains('active'));
 
-      if (summaryTab && !summaryTab.classList.contains('active')) {
+      if (summaryTab) {
         console.log('[MRN Automation] Clicking Summary tab');
-        summaryTab.click();
-        await new Promise(resolve => setTimeout(resolve, 300));
+        setActiveNote(CONFIG.SUMMARY_NOTE_ID);
+        await new Promise(resolve => setTimeout(resolve, 200));
         console.log('[MRN Automation] Triggering loadSummary with autoPlay=true');
-        await loadSummary(true);
-      } else if (summaryTab && summaryTab.classList.contains('active')) {
-        console.log('[MRN Automation] Summary already active, triggering loadSummary with autoPlay=true');
         await loadSummary(true);
       }
 
