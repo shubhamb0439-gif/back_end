@@ -1296,6 +1296,11 @@
   }
 
   function setActiveTranscriptId(id) {
+    // Save current EHR state before switching
+    if (state.currentActiveItemId && state.currentActiveItemId !== id) {
+      saveEHRStateForTranscription(state.currentActiveItemId);
+    }
+
     state.currentActiveItemId = id;
     saveActiveItemId(id);
     highlightActiveCard();
@@ -1303,11 +1308,16 @@
     // clear cross-item error so it doesn't block viewing cached results elsewhere
     state.aiDiagnosisLastError = null;
 
-    // Reset EHR to search state when switching transcriptions
-    resetEHRToSearchState();
-
     const ctx = getActiveHistoryContext();
     const existingNote = getActiveNoteForItem(ctx.item);
+
+    // Try to restore EHR state for this transcription
+    const ehrRestored = restoreEHRStateForTranscription(id);
+
+    if (!ehrRestored) {
+      // No EHR state cached - reset to search state
+      resetEHRToSearchState();
+    }
 
     if (existingNote && existingNote.data && Object.keys(existingNote.data).length > 0) {
       // Note already exists for this transcript - show it
@@ -4086,6 +4096,89 @@
     }
   }
 
+  function saveEHRStateForTranscription(transcriptionId) {
+    if (!transcriptionId) return;
+
+    try {
+      const isSidebarOpen = dom.ehrSidebar?.classList.contains('active') || false;
+
+      // Only save if there's actual patient data
+      if (!state.currentPatient || !isSidebarOpen) {
+        localStorage.removeItem(`ehr_state_transcript_${transcriptionId}`);
+        return;
+      }
+
+      localStorage.setItem(
+        `ehr_state_transcript_${transcriptionId}`,
+        JSON.stringify({
+          currentPatient: state.currentPatient,
+          currentNotes: state.currentNotes,
+          activeNoteId: document.querySelector('.ehr-note-item.active')?.dataset?.noteId || CONFIG.SUMMARY_NOTE_ID,
+          noteCache: [...state.noteCache.entries()],
+          summaryCache: [...state.summaryCacheByMrn.entries()],
+          sidebarOpen: isSidebarOpen,
+          savedAt: Date.now(),
+        })
+      );
+    } catch (err) {
+      console.warn('[EHR] Failed to save state for transcription:', err);
+    }
+  }
+
+  function restoreEHRStateForTranscription(transcriptionId) {
+    if (!transcriptionId) return false;
+
+    try {
+      const raw = localStorage.getItem(`ehr_state_transcript_${transcriptionId}`);
+      if (!raw) return false;
+
+      const saved = JSON.parse(raw);
+      if (!saved.currentPatient || !saved.currentNotes) {
+        localStorage.removeItem(`ehr_state_transcript_${transcriptionId}`);
+        return false;
+      }
+
+      // Restore state
+      state.currentPatient = saved.currentPatient;
+      state.currentNotes = saved.currentNotes || [];
+
+      state.noteCache.clear();
+      (saved.noteCache || []).forEach(([k, v]) => state.noteCache.set(k, v));
+
+      (saved.summaryCache || []).forEach(([k, v]) => state.summaryCacheByMrn.set(k, v));
+
+      if (state.currentPatient?.mrn_no && state.currentPatient?.patient_id) {
+        if (dom.mrnInput) dom.mrnInput.value = state.currentPatient.mrn_no;
+      }
+
+      // Open sidebar if it was open
+      if (saved.sidebarOpen) {
+        if (dom.ehrSidebar) dom.ehrSidebar.classList.add('active');
+        if (dom.ehrOverlay) dom.ehrOverlay.classList.add('active');
+      }
+
+      // Render patient and notes
+      renderPatient(state.currentPatient);
+      renderClinicalNotes(state.currentNotes);
+
+      // Restore active note
+      const activeId = saved.activeNoteId || CONFIG.SUMMARY_NOTE_ID;
+      setActiveNote(activeId);
+
+      if (activeId === CONFIG.SUMMARY_NOTE_ID) {
+        loadSummary();
+      } else {
+        loadNote(activeId);
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[EHR] Failed to restore state for transcription:', err);
+      localStorage.removeItem(`ehr_state_transcript_${transcriptionId}`);
+      return false;
+    }
+  }
+
   function resetEHRToSearchState() {
     if (!dom.ehrSidebar || !dom.ehrOverlay) return;
 
@@ -4460,7 +4553,7 @@
     }
   }
 
-  async function loadSummary() {
+  async function loadSummary(autoPlay = false) {
     if (!dom.noteDetail) return;
     if (state.summaryGenerating) return; // prevent double-click spam
 
@@ -4473,6 +4566,15 @@
     const cached = state.summaryCacheByMrn.get(mrn);
     if (cached && cached.text) {
       renderSummaryDetail(cached.text, cached.template_title || 'Summary Note');
+      if (autoPlay) {
+        // Auto-play after a short delay to ensure UI is rendered
+        setTimeout(() => {
+          const speakerBtn = document.getElementById('speakerBtn');
+          if (speakerBtn) {
+            speakerBtn.click();
+          }
+        }, 500);
+      }
       return;
     }
 
@@ -4497,6 +4599,16 @@
       });
 
       renderSummaryDetail(data?.text, data?.template_title || 'Summary Note');
+
+      if (autoPlay) {
+        // Auto-play after a short delay to ensure UI is rendered
+        setTimeout(() => {
+          const speakerBtn = document.getElementById('speakerBtn');
+          if (speakerBtn) {
+            speakerBtn.click();
+          }
+        }, 500);
+      }
     } catch (e) {
       stopSummaryTimer();
       dom.noteDetail.innerHTML =
@@ -4555,6 +4667,10 @@
 
       if (summaryTab && !summaryTab.classList.contains('active')) {
         summaryTab.click();
+        // Wait for summary tab to be activated, then auto-play
+        await new Promise(resolve => setTimeout(resolve, 300));
+        // Trigger auto-play by calling loadSummary with autoPlay=true
+        await loadSummary(true);
       }
 
     } catch (err) {
