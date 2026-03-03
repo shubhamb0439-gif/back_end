@@ -3576,7 +3576,7 @@
       });
 
       state.socket.on('audio_playback_complete', (data) => {
-        console.log('[SCRIBE] Audio playback complete notification received:', data);
+        console.log('[SCRIBE] 🎵 Audio playback complete notification received:', data);
         const speakerBtn = document.getElementById('speakerBtn');
         if (speakerBtn) {
           speakerBtn.disabled = false;
@@ -3587,10 +3587,28 @@
               <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
               <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
             </svg>
-            Generate Audio
+            Play
           `;
-          console.log('[SCRIBE] Speaker button reset to "Generate Audio"');
+          console.log('[SCRIBE] ✅ Speaker button reset to "Play"');
+        } else {
+          console.warn('[SCRIBE] ⚠️ Speaker button not found when resetting after playback complete');
         }
+
+        // Reset MRN automation state to allow re-automation on new transcript
+        console.log('[SCRIBE] ♻️ Resetting MRN automation state after audio complete');
+        console.log('[SCRIBE] Previous state:', {
+          lastProcessedMrn: state.lastProcessedMrn,
+          mrnAutomationInProgress: state.mrnAutomationInProgress
+        });
+
+        state.lastProcessedMrn = null;
+        state.mrnAutomationInProgress = false;
+        if (state.mrnAutomationTimer) {
+          clearTimeout(state.mrnAutomationTimer);
+          state.mrnAutomationTimer = null;
+        }
+
+        console.log('[SCRIBE] ✅ MRN automation state reset - ready for next transcription');
       });
 
       state.socket.on('audio_state_changed', (data) => {
@@ -4574,7 +4592,7 @@
       renderSummaryDetail(cached.text, cached.template_title || 'Summary Note');
       if (autoPlay) {
         console.log('[Load Summary] Auto-play requested (cached)');
-        // Auto-play after a short delay to ensure UI is rendered
+        // Auto-play after a longer delay to ensure UI is fully rendered and button is ready
         setTimeout(() => {
           const speakerBtn = document.getElementById('speakerBtn');
           console.log('[Load Summary] Speaker button found:', !!speakerBtn);
@@ -4582,7 +4600,7 @@
             console.log('[Load Summary] Clicking speaker button');
             speakerBtn.click();
           }
-        }, 500);
+        }, 2000);
       }
       return;
     }
@@ -4613,7 +4631,7 @@
 
       if (autoPlay) {
         console.log('[Load Summary] Auto-play requested (fresh)');
-        // Auto-play after a short delay to ensure UI is rendered
+        // Auto-play after a longer delay to ensure UI is fully rendered and button is ready
         setTimeout(() => {
           const speakerBtn = document.getElementById('speakerBtn');
           console.log('[Load Summary] Speaker button found:', !!speakerBtn);
@@ -4621,7 +4639,7 @@
             console.log('[Load Summary] Clicking speaker button');
             speakerBtn.click();
           }
-        }, 500);
+        }, 2000);
       }
     } catch (e) {
       stopSummaryTimer();

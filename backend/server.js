@@ -6327,6 +6327,53 @@ io.on('connection', (socket) => {
     }
   });
 
+  // -------- audio_playback_complete (NEW) --------
+  socket.on('audio_playback_complete', (data) => {
+    try {
+      const roomId = socket.data?.roomId;
+      if (!roomId) {
+        console.warn('[audio_playback_complete] No room for this socket');
+        return;
+      }
+
+      console.log('[audio_playback_complete] Device finished playing audio, notifying room:', roomId, data);
+
+      // Broadcast to the entire room (especially the cockpit)
+      io.to(roomId).emit('audio_playback_complete', {
+        deviceId: data?.deviceId || socket.data?.xrId,
+        timestamp: data?.timestamp || Date.now()
+      });
+
+      console.log('[audio_playback_complete] ✅ Notified room of playback completion');
+    } catch (e) {
+      console.error('[audio_playback_complete] Error:', e?.message || e);
+    }
+  });
+
+  // -------- audio_state_changed (NEW) --------
+  socket.on('audio_state_changed', (data) => {
+    try {
+      const roomId = socket.data?.roomId;
+      if (!roomId) {
+        console.warn('[audio_state_changed] No room for this socket');
+        return;
+      }
+
+      console.log('[audio_state_changed] Device audio state changed, notifying room:', roomId, data);
+
+      // Broadcast to the entire room (especially the cockpit)
+      io.to(roomId).emit('audio_state_changed', {
+        state: data?.state,
+        deviceId: data?.deviceId || socket.data?.xrId,
+        timestamp: data?.timestamp || Date.now()
+      });
+
+      console.log('[audio_state_changed] ✅ Notified room of state change');
+    } catch (e) {
+      console.error('[audio_state_changed] Error:', e?.message || e);
+    }
+  });
+
   // -------- battery (NEW) --------
   socket.on('battery', ({ xrId, batteryPct, charging }) => {
     try {
