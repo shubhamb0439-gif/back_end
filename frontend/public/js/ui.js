@@ -1470,6 +1470,14 @@ function stopVoiceRecognition() {
 function processVoiceCommand(cmd) {
     const c = cmd.toLowerCase();
 
+    if (/\b(stop|bye|goodbye|thank you|thanks|sleep|shut up)\b.*\b(r[ehi]+a|rhea|reha|ria|reya)\b/.test(c) ||
+        /\b(r[ehi]+a|rhea|reha|ria|reya)\b.*\b(stop|bye|goodbye|thank you|thanks|sleep|shut up)\b/.test(c)) {
+        msg('Voice', 'Goodbye!');
+        if (orbUI) orbUI.updateResponse('Goodbye!', false);
+        endWakeSession();
+        return;
+    }
+
     if (/\bnote\b/.test(c)) { onStartRecordingNote(); return; }
     if (/\bcreate\b/.test(c)) { onStopRecordingNote(); return; }
 
@@ -1562,21 +1570,17 @@ const WAKE_LISTEN_DURATION_MS = 15000;
 let _wakeSessionTimer = null;
 let _wakeSessionActive = false;
 
-function speakPrompt(text) {
+const GREETING_AUDIO_URL = '/public/audio/greeting-chime.wav';
+let _greetingAudioCache = null;
+
+function playGreetingAudio() {
     return new Promise((resolve) => {
         try {
-            if (!window.speechSynthesis) {
-                console.warn('[TTS] speechSynthesis not available');
-                resolve(false);
-                return;
+            if (!_greetingAudioCache) {
+                _greetingAudioCache = new Audio(GREETING_AUDIO_URL);
             }
-            window.speechSynthesis.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US';
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
+            const audio = _greetingAudioCache;
+            audio.currentTime = 0;
 
             let resolved = false;
             const done = (ok) => {
@@ -1585,25 +1589,28 @@ function speakPrompt(text) {
                 resolve(ok);
             };
 
-            utterance.onend = () => {
-                console.log('[TTS] Finished speaking:', text);
+            audio.onended = () => {
+                console.log('[GREETING] Chime finished');
                 done(true);
             };
-            utterance.onerror = (ev) => {
-                console.warn('[TTS] Speech error:', ev?.error);
+            audio.onerror = () => {
+                console.warn('[GREETING] Audio file failed, falling back to beep');
+                playTTSBeep();
                 done(false);
             };
 
-            setTimeout(() => done(false), 4000);
+            setTimeout(() => done(false), 3000);
 
-            window.speechSynthesis.speak(utterance);
-            console.log('[TTS] Speaking:', text);
-
-            if (window.speechSynthesis.paused) {
-                window.speechSynthesis.resume();
-            }
+            audio.play().then(() => {
+                console.log('[GREETING] Playing greeting chime');
+            }).catch(() => {
+                console.warn('[GREETING] Autoplay blocked, falling back to beep');
+                playTTSBeep();
+                done(false);
+            });
         } catch (e) {
-            console.warn('[TTS] Failed to speak:', e);
+            console.warn('[GREETING] Error:', e);
+            playTTSBeep();
             resolve(false);
         }
     });
@@ -1669,15 +1676,13 @@ function initWakeListener() {
             _wakeSessionActive = true;
             wakeListener.pause();
 
-            playTTSBeep();
-
             (async () => {
-                const spoke = await speakPrompt('How can I help you?');
-                console.log('[WakeListener] TTS completed:', spoke);
+                const played = await playGreetingAudio();
+                console.log('[WakeListener] Greeting audio completed:', played);
 
                 if (!_wakeSessionActive) return;
 
-                await new Promise(r => setTimeout(r, spoke ? 300 : 800));
+                await new Promise(r => setTimeout(r, played ? 200 : 500));
 
                 if (!_wakeSessionActive) return;
                 if (!isListening) {
