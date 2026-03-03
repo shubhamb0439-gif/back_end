@@ -740,7 +740,10 @@ function createSignaling() {
         onDisconnected: () => {
             isServerConnected = false;
 
-            userWantsConnected = false; // prevent auto-reconnect after a manual disconnect
+            // Only disable reconnect if user manually disconnected
+            if (signaling?._manualClose) {
+                userWantsConnected = false;
+            }
 
             setStatus(false);
             msg('System', 'Disconnected from server');
