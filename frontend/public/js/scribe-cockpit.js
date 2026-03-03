@@ -1200,6 +1200,14 @@
     const qIdx = state.pendingSoapItemQueue.indexOf(id);
     if (qIdx !== -1) state.pendingSoapItemQueue.splice(qIdx, 1);
 
+    // Clean up EHR state for this transcript
+    try {
+      localStorage.removeItem(`ehr_state_transcript_${id}`);
+      console.log('[Delete Transcript] Cleared EHR state for:', id);
+    } catch (err) {
+      console.warn('[Delete Transcript] Failed to clear EHR state:', err);
+    }
+
     const remaining = dom.transcript?.querySelectorAll('.scribe-card') || [];
     if (remaining.length === 0) {
       ensureTranscriptPlaceholder();
@@ -1211,11 +1219,38 @@
       renderSoapBlank();
       if (dom.templateSelect) dom.templateSelect.value = '';
       clearAiDiagnosisPaneUi();
+
+      // Close EHR sidebar and clear patient data
+      if (dom.ehrSidebar) dom.ehrSidebar.classList.remove('active');
+      if (dom.ehrOverlay) dom.ehrOverlay.classList.remove('active');
+      state.currentPatient = null;
+      state.currentNotes = [];
+      state.noteCache.clear();
+      state.summaryCacheByMrn.clear();
+      if (dom.mrnInput) dom.mrnInput.value = '';
+      if (dom.notesList) dom.notesList.innerHTML = '';
+      if (dom.noteDetail) dom.noteDetail.innerHTML = '';
+      console.log('[Delete Transcript] Cleared all EHR data (last transcript deleted)');
+
       return;
     }
 
     const activeId = loadActiveItemId();
     if (activeId === id) {
+      // Deleted transcript was active - close EHR sidebar before switching
+      if (dom.ehrSidebar && dom.ehrSidebar.classList.contains('active')) {
+        console.log('[Delete Transcript] Closing EHR sidebar for deleted active transcript');
+        dom.ehrSidebar.classList.remove('active');
+        if (dom.ehrOverlay) dom.ehrOverlay.classList.remove('active');
+        state.currentPatient = null;
+        state.currentNotes = [];
+        state.noteCache.clear();
+        state.summaryCacheByMrn.clear();
+        if (dom.mrnInput) dom.mrnInput.value = '';
+        if (dom.notesList) dom.notesList.innerHTML = '';
+        if (dom.noteDetail) dom.noteDetail.innerHTML = '';
+      }
+
       const newActive = hist.length ? hist[hist.length - 1].id : '';
       if (newActive) setActiveTranscriptId(newActive);
     } else {
