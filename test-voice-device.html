@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Device Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .test-panel {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        h1 { color: #3b82f6; }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #333;
+            border-radius: 8px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #06b6d4;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #444;
+        }
+        .status.success {
+            background: #10b981;
+            color: #000;
+        }
+        .status.error {
+            background: #ef4444;
+        }
+        button {
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .log {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            padding: 5px;
+            border-bottom: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-panel">
+        <h1>Voice Device Implementation Test</h1>
+
+        <div class="test-section">
+            <h2>✓ Implementation Checklist</h2>
+            <div class="status success">✓ New minimal UI layout created</div>
+            <div class="status success">✓ Central orb with gradient ring implemented</div>
+            <div class="status success">✓ PTT button with press & hold mechanics</div>
+            <div class="status success">✓ Voice recognition auto-start/stop on button events</div>
+            <div class="status success">✓ Voice command detection and routing</div>
+            <div class="status success">✓ Waveform visualization with Web Audio API</div>
+            <div class="status success">✓ Response card UI for audio playback</div>
+            <div class="status success">✓ Dark theme with purple/cyan gradients</div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 Key Features</h2>
+            <ul>
+                <li><strong>Single Button Access:</strong> PTT button controls all voice interactions</li>
+                <li><strong>Press & Hold:</strong> Start recording on mousedown/touchstart</li>
+                <li><strong>Voice Reactive Orb:</strong> Waveform animation responds to voice input</li>
+                <li><strong>Auto Transcription:</strong> Real-time speech-to-text while holding</li>
+                <li><strong>Voice Commands:</strong> Detect commands like "start stream", "stop stream"</li>
+                <li><strong>Auto Connect:</strong> Connects to signaling server on page load</li>
+                <li><strong>Response Playback:</strong> Shows audio responses from assistant</li>
+                <li><strong>Keyboard Support:</strong> Spacebar also works as PTT</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 Workflow</h2>
+            <ol>
+                <li><strong>Page Load:</strong> Auto-fetches XR ID and connects to server</li>
+                <li><strong>Auto-Stream:</strong> When desktop connects, video stream starts automatically</li>
+                <li><strong>Press PTT:</strong> User presses and holds the mic button</li>
+                <li><strong>Recording Starts:</strong> Speech recognition activates, mic mutes (frees hardware)</li>
+                <li><strong>Live Waveform:</strong> Orb shows real-time audio visualization</li>
+                <li><strong>Real-time Transcript:</strong> Interim results display in orb</li>
+                <li><strong>Release PTT:</strong> Speech recognition stops, final transcript processed</li>
+                <li><strong>Command Detection:</strong> If voice command detected, execute it</li>
+                <li><strong>Transcript Routing:</strong> If not a command, send to scribe cockpit</li>
+                <li><strong>Response:</strong> Audio response shows in card with play button</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h2>🎤 Voice Commands</h2>
+            <ul>
+                <li>"start stream" - Start video streaming</li>
+                <li>"stop stream" - Stop video streaming</li>
+                <li>"mute" - Mute microphone</li>
+                <li>"unmute" - Unmute microphone</li>
+                <li>"connect" - Connect to server</li>
+                <li>"disconnect" - Disconnect from server</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>📱 Files Modified/Created</h2>
+            <div class="log">
+                <div class="log-entry">✓ /frontend/views/device.html - Complete UI rewrite</div>
+                <div class="log-entry">✓ /frontend/public/css/device.css - Dark theme with gradients</div>
+                <div class="log-entry">✓ /frontend/public/js/voice-device.js - NEW: PTT + waveform logic</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔧 Technical Details</h2>
+            <ul>
+                <li><strong>Event Handling:</strong> mousedown/touchstart for press, mouseup/touchend for release</li>
+                <li><strong>Audio Analysis:</strong> Web Audio API with AnalyserNode</li>
+                <li><strong>FFT Size:</strong> 256 for real-time performance</li>
+                <li><strong>Canvas Rendering:</strong> requestAnimationFrame for smooth waveform</li>
+                <li><strong>Mic Management:</strong> Mute stream mic when voice recognition active</li>
+                <li><strong>Auto-Connect:</strong> Fetches XR ID from session API</li>
+                <li><strong>WebRTC Integration:</strong> Reuses existing WebRtcStreamer class</li>
+                <li><strong>Voice Integration:</strong> Reuses existing VoiceController class</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🎨 Design Elements</h2>
+            <ul>
+                <li><strong>Colors:</strong> Black background (#000000)</li>
+                <li><strong>Primary Gradient:</strong> Purple (#a855f7) → Blue (#3b82f6) → Cyan (#06b6d4)</li>
+                <li><strong>Orb Size:</strong> 280px (240px on mobile)</li>
+                <li><strong>PTT Button:</strong> 80px (70px on mobile)</li>
+                <li><strong>Animations:</strong> Pulse, glow, ring effects</li>
+                <li><strong>Typography:</strong> Clean sans-serif, cyan accent text</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>✅ Testing Instructions</h2>
+            <ol>
+                <li>Navigate to <code>/device</code> route</li>
+                <li>Verify XR ID is auto-populated (or enter manually)</li>
+                <li>Press and hold the PTT button (or spacebar)</li>
+                <li>Speak a command or transcript</li>
+                <li>Watch the waveform animate in real-time</li>
+                <li>Release the button</li>
+                <li>Verify command execution or transcript routing</li>
+                <li>Check response card appears when audio received</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Status</h2>
+            <div class="status success">
+                <strong>Implementation Complete!</strong><br>
+                All core features implemented and ready for testing.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
