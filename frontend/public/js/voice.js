@@ -212,12 +212,14 @@ export class VoiceController {
 
   /**
    * Format MRN numbers in transcript text
-   * Converts spoken MRN patterns to formatted MRN-XXXXXX format (NO SPACES)
-   * Examples: "mrn aba 121" -> "MRN-ABA121"
-   *           "MRNA BA121" -> "MRN-BA121"
-   *           "m r n zero zero one a b c" -> "MRN-001ABC"
+   * SIMPLIFIED LOGIC: "MRN-" is a constant template
+   * When user says "MRN" + any letters/numbers, format as MRN-XXXXXXX (no spaces)
    *
-   * CRITICAL: Output format is ALWAYS "MRN-" + alphanumeric code with NO SPACES
+   * Examples:
+   *   "MRN ABA 121" -> "MRN-ABA121"
+   *   "MRN A BA 123" -> "MRN-ABA123"
+   *   "MRNA BA 121" -> "MRN-ABA121"
+   *   "m r n zero one two" -> "MRN-012"
    */
   _formatMRN(text) {
     if (!text) return text;
@@ -227,93 +229,44 @@ export class VoiceController {
       'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
     };
 
-    // Exclude common words that shouldn't be part of MRN
-    const excludeWords = /^(is|the|number|patient|id|medical|record|an|dash|hyphen|mrn|hi|doctor|hello)$/i;
+    // Words that signal end of MRN code
+    const stopWords = /^(is|the|number|patient|id|medical|record|on|in|at|to|for|with|from|by|of|off|file|arrived|was|has|note|consultation|and|or|hi|doctor|hello|came|went|had)$/i;
 
     let formatted = text;
 
-    // Pattern 0: "MRNA BA121" - handle speech recognition mishearing "MRN A" as "MRNA"
+    // SINGLE SIMPLE PATTERN: Catch "MRN" + any following alphanumeric content
+    // Handles: "MRN", "mrn", "m r n", "MRNA" (misheard), etc.
     formatted = formatted.replace(
-      /\bMRNA\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)*)\b/gi,
-      (match, code) => {
-        const cleanCode = code.trim().replace(/\s+/g, '').toUpperCase();
-        if (cleanCode.length >= 3 && cleanCode.length <= 12 && !excludeWords.test(cleanCode)) {
-          return `MRN-${cleanCode}`;
-        }
-        return match;
-      }
-    );
-
-    // Pattern 1: "MRN number is MRN ABA121" - handle redundant MRN
-    formatted = formatted.replace(
-      /\b(?:m\s*r\s*n|mrn)\s+number\s+is\s+(?:m\s*r\s*n|mrn)\s+([a-z0-9\s]+)\b/gi,
-      (match, code) => {
-        const cleanCode = code.trim().replace(/\s+/g, '').toUpperCase();
-        if (cleanCode.length >= 3 && cleanCode.length <= 12 && !excludeWords.test(cleanCode)) {
-          return `MRN-${cleanCode}`;
-        }
-        return match;
-      }
-    );
-
-    // Pattern 2: "MRN is ABA121" or "MRN number is ABA121" (with number words)
-    formatted = formatted.replace(
-      /\b(m\s*r\s*n|mrn)\s+(?:number\s+)?is\s+((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|[a-z0-9])[\s]*)+)\b/gi,
-      (match, prefix, code) => {
-        const words = code.trim().split(/\s+/);
-        const converted = words
-          .filter(w => w && !excludeWords.test(w))
-          .map(w => {
-            const lower = w.toLowerCase();
-            if (numberWords[lower]) return numberWords[lower];
-            return w.toUpperCase();
-          })
-          .join('');
-
-        if (converted.length >= 3 && converted.length <= 12) {
-          return `MRN-${converted}`;
-        }
-        return match;
-      }
-    );
-
-    // Pattern 3: "mrn" or "m r n" followed by alphanumeric code or number words
-    // Limit to 3-12 alphanumeric tokens to avoid capturing too much
-    formatted = formatted.replace(
-      /\b(m\s*r\s*n|mrn)\s+((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|[a-z]{1,3}|\d+)[\s\-]*){1,12})/gi,
+      /\b(MRNA|m\s*r\s*n|mrn)\s+([\s\S]+?)(?=\.|,|;|$|\b(?:hi|doctor|patient|on|in|at|to|for|with|from|note|consultation)\b)/gi,
       (match, prefix, codeRaw) => {
-        // Split into individual characters/words
-        const words = codeRaw.trim().split(/[\s\-]+/);
-
-        // Stop at common stop words
-        const stopWords = /^(on|in|at|to|for|with|from|by|of|off|file|patient|arrived|was|has|note|consultation|and|or|the|hi|doctor|hello)$/i;
+        // Extract all words/characters after "MRN"
+        const words = codeRaw.trim().split(/\s+/);
         const validWords = [];
 
+        // Collect everything until we hit a stop word
         for (const w of words) {
           if (!w) continue;
-          if (stopWords.test(w)) break; // Stop collecting at stop words
-          if (!excludeWords.test(w)) validWords.push(w);
+          if (stopWords.test(w)) break;
+          validWords.push(w);
         }
 
-        // Convert number words and single letters - JOIN WITH NO SPACES
+        // Convert to alphanumeric code (remove spaces, convert number words)
         const cleanCode = validWords
           .map(w => {
             const lower = w.toLowerCase();
-            // Check if it's a number word
+            // Convert number words to digits
             if (numberWords[lower]) return numberWords[lower];
-            // Single letter - keep as is
-            if (w.length === 1) return w.toUpperCase();
-            // Multi-character string - keep all characters
+            // Keep all alphanumeric characters
             return w.toUpperCase();
           })
-          .join('') // JOIN WITH NO SPACES - CRITICAL!
+          .join('') // JOIN WITHOUT SPACES
           .replace(/[^A-Z0-9]/g, ''); // Remove any non-alphanumeric chars
 
-        // Only format if we have a valid code (3-12 chars)
+        // Only format if we have a valid MRN code (3-12 characters)
         if (cleanCode.length >= 3 && cleanCode.length <= 12) {
-          return `MRN-${cleanCode}`; // Format: MRN-XXXXXX (no spaces)
+          return `MRN-${cleanCode}`;
         }
-        return match; // Return original if invalid
+        return match;
       }
     );
 
