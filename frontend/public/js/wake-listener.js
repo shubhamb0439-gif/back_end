@@ -84,6 +84,33 @@ export class WakeListener {
     console.log('[WakeListener] Resumed');
   }
 
+  forceResume() {
+    if (this._destroyed) return;
+    this._paused = false;
+    this._restartAttempts = 0;
+    this._lastActivityAt = Date.now();
+    if (!this._running) {
+      this._running = true;
+    }
+    this._buildRecognizer();
+    try {
+      this._rec.start();
+    } catch (e) {
+      console.warn('[WakeListener] forceResume start failed:', e?.message);
+      setTimeout(() => {
+        if (this._running && !this._paused && !this._destroyed) {
+          try {
+            this._buildRecognizer();
+            this._rec.start();
+            this._lastActivityAt = Date.now();
+          } catch {}
+        }
+      }, 500);
+    }
+    this._startHealthCheck();
+    console.log('[WakeListener] Force-resumed with fresh recognizer');
+  }
+
   isPaused() { return this._paused; }
   isRunning() { return this._running; }
 

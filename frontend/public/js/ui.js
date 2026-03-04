@@ -536,6 +536,20 @@ function setStatus(connected) {
 
     // preview placeholder
     elNoStream.hidden = !!streamActive;
+
+    const bdot = document.getElementById('bdot');
+    const btxt = document.getElementById('btxt');
+    if (bdot) {
+        bdot.classList.toggle('off', !connected);
+    }
+    if (btxt) {
+        btxt.classList.toggle('off', !connected);
+        btxt.textContent = connected ? 'CONNECTED' : 'DISCONNECTED';
+    }
+    const badgeEl = document.getElementById('badge');
+    if (badgeEl) {
+        badgeEl.style.borderColor = connected ? 'rgba(0,210,80,.38)' : 'rgba(239,68,68,.38)';
+    }
 }
 
 // Apply mic state locally (mirrors Android's handleControlCommand)
@@ -1465,6 +1479,14 @@ function stopVoiceRecognition() {
     if (recordingActive) finalizeRecordingNote();
     setStatus(isServerConnected);
     if (orbUI) orbUI.syncVoiceState(false);
+
+    if (wakeListener && !_wakeSessionActive) {
+        setTimeout(() => {
+            if (!isListening && !_wakeSessionActive && wakeListener) {
+                wakeListener.forceResume();
+            }
+        }, 700);
+    }
 }
 
 function processVoiceCommand(cmd) {
@@ -1571,17 +1593,11 @@ let _wakeSessionTimer = null;
 let _wakeSessionActive = false;
 
 const GREETING_AUDIO_URL = '/public/audio/ElevenLabs_2026-03-03T18_39_37_Trinity_–_Calm_Female_Sleep_&_Affirmation_Voice_pvc_sp99_s50_sb71_se14_b_m2.mp3';
-let _greetingAudioCache = null;
 
 function playGreetingAudio() {
     return new Promise((resolve) => {
         try {
-            if (!_greetingAudioCache) {
-                _greetingAudioCache = new Audio(GREETING_AUDIO_URL);
-            }
-            const audio = _greetingAudioCache;
-            audio.currentTime = 0;
-
+            const audio = new Audio(GREETING_AUDIO_URL);
             let resolved = false;
             const done = (ok) => {
                 if (resolved) return;
@@ -1599,7 +1615,7 @@ function playGreetingAudio() {
                 done(false);
             };
 
-            setTimeout(() => done(false), 3000);
+            setTimeout(() => done(true), 15000);
 
             audio.play().then(() => {
                 console.log('[GREETING] Playing greeting chime');
@@ -1646,10 +1662,10 @@ function endWakeSession() {
         stopVoiceRecognition();
     }
     setTimeout(() => {
-        if (wakeListener && !_wakeSessionActive) {
-            wakeListener.resume();
+        if (wakeListener && !_wakeSessionActive && !isListening) {
+            wakeListener.forceResume();
         }
-    }, 500);
+    }, 600);
 }
 
 function resetWakeSessionTimer() {
@@ -1661,11 +1677,25 @@ function resetWakeSessionTimer() {
     }, WAKE_LISTEN_DURATION_MS);
 }
 
-function initWakeListener() {
+async function primeMicPermission() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => t.stop());
+        console.log('[WakeListener] Mic permission primed');
+        return true;
+    } catch (e) {
+        console.warn('[WakeListener] Mic permission denied:', e.message);
+        return false;
+    }
+}
+
+async function initWakeListener() {
     if (!WakeListener.isAvailable()) {
         console.log('[WakeListener] Speech API not available; skipping.');
         return;
     }
+
+    await primeMicPermission();
 
     wakeListener = new WakeListener({
         wakePhrase: 'hey rhea',
@@ -1700,23 +1730,23 @@ function initWakeListener() {
     if (micBtn) {
         micBtn.addEventListener('touchstart', () => {
             if (_wakeSessionActive) endWakeSession();
-            if (wakeListener?.isRunning()) wakeListener.pause();
+            if (wakeListener) wakeListener.pause();
         }, { passive: true });
 
         micBtn.addEventListener('touchend', () => {
             setTimeout(() => {
-                if (wakeListener?.isRunning() && !_wakeSessionActive && !isListening) {
-                    wakeListener.resume();
+                if (wakeListener && !_wakeSessionActive && !isListening) {
+                    wakeListener.forceResume();
                 }
-            }, 500);
+            }, 600);
         }, { passive: true });
 
         micBtn.addEventListener('touchcancel', () => {
             setTimeout(() => {
-                if (wakeListener?.isRunning() && !_wakeSessionActive && !isListening) {
-                    wakeListener.resume();
+                if (wakeListener && !_wakeSessionActive && !isListening) {
+                    wakeListener.forceResume();
                 }
-            }, 500);
+            }, 600);
         }, { passive: true });
 
         micBtn.addEventListener('click', () => {
@@ -1724,11 +1754,15 @@ function initWakeListener() {
                 endWakeSession();
                 return;
             }
-            if (wakeListener?.isRunning()) {
+            if (wakeListener) {
                 if (isListening) {
                     wakeListener.pause();
                 } else {
-                    setTimeout(() => wakeListener.resume(), 500);
+                    setTimeout(() => {
+                        if (!isListening && !_wakeSessionActive) {
+                            wakeListener.forceResume();
+                        }
+                    }, 600);
                 }
             }
         });
@@ -1738,7 +1772,7 @@ function initWakeListener() {
     console.log('[WakeListener] Initialized and running.');
 }
 
-initWakeListener();
+initWakeListener().catch(e => console.warn('[WakeListener] Init failed:', e));
 
 // Recording buttons
 function onStartRecordingNote() {
