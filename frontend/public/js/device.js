@@ -381,7 +381,7 @@ export class WebRtcStreamer {
   }
 
   muteMic() {
-    // 1) Free the mic hardware so SpeechRecognition can use it while video keeps streaming
+    // 1) Free the mic hardware while video keeps streaming
     this._stopLocalMicTracks();
 
     // 2) Keep RTP m=audio alive (no renegotiation / no UI flap) by sending silence
